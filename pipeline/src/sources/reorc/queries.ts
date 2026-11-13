@@ -142,10 +142,10 @@ GROUP BY f.dt, ${CTYPE}, LOWER(f.sales_platform)`
     id: 'meta_ad',
     desc: 'Meta 广告×日（m4 素材下钻；推导 adList=[ad_name, ad_type, ad_no]）',
     sql: (p) => `SELECT f.dt AS date, f.ad_name AS ad_name, f.creative_type AS ad_type,
-       COALESCE(NULLIF(TRIM(f.creative_code), ''), f.creative_id) AS ad_no, LOWER(f.sales_platform) AS site, ${META_MEASURE}
+       COALESCE(NULLIF(TRIM(f.creative_code), ''), f.ad_id) AS ad_no, LOWER(f.sales_platform) AS site, ${META_MEASURE}
 FROM ${META_BY_AD} f
 WHERE f.${META_FILTER}
-GROUP BY f.dt, f.ad_name, f.creative_type, COALESCE(NULLIF(TRIM(f.creative_code), ''), f.creative_id), LOWER(f.sales_platform)`
+GROUP BY f.dt, f.ad_name, f.creative_type, COALESCE(NULLIF(TRIM(f.creative_code), ''), f.ad_id), LOWER(f.sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
