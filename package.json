@@ -1,0 +1,19 @@
+{
+  "name": "ads-analysis-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "广告流量分析看板（正式版）：Meta + Google 广告数据看板，云端自动数据管道 + GitHub Pages 自动部署",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "dev": "pnpm --filter frontend dev"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "vue-demi"]
+  }
+}

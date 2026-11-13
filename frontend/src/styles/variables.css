@@ -1,0 +1,15 @@
+/* 设计变量（迁移自原型 :root）——全站唯一颜色/字号来源 */
+:root {
+  --bg: #f4f6fa;
+  --card: #fff;
+  --line: #e3e8f0;
+  --txt: #22314a;
+  --sub: #7c8aa0;
+  --pri: #2563eb;
+  --head: #f7f9fc;
+  --c-meta: #3b82f6;
+  --c-google: #f97316;
+  --c-tiktok: #8b5cf6;
+  --c-snap: #be123c;
+  --c-edm: #10b981;
+}

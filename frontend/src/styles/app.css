@@ -1,0 +1,61 @@
+/* App 壳样式（顶栏 + 一级导航；迁移自原型 header/nav.lv1） */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+header .ttl {
+  font-size: 17px;
+  font-weight: 700;
+}
+.hright {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #0a7a3d;
+  background: #e8f7ee;
+  border: 1px solid #bfe8cf;
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+.badge i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #12b76a;
+  display: inline-block;
+}
+.badge-err {
+  color: #b42318;
+  background: #fef3f2;
+  border-color: #fecdca;
+}
+nav.lv1 {
+  display: flex;
+  gap: 6px;
+  background: #fff;
+  padding: 8px 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+nav.lv1 .lv1-btn {
+  background: #eef2f8;
+  color: var(--sub);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 8px 22px;
+  border-radius: 8px 8px 0 0;
+  text-decoration: none;
+}
+nav.lv1 .lv1-btn.on {
+  background: var(--pri);
+  color: #fff;
+}
