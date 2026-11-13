@@ -20,6 +20,10 @@ on:
         description: '定向探查使用的连接名（默认 selectdb）'
         type: string
         default: ''
+      window_days:
+        description: '拉取窗口天数（默认 10 天滚动；数据验证时可临时加大）'
+        type: string
+        default: ''
 
 permissions:
   contents: write # 提交数据文件
@@ -68,6 +72,7 @@ jobs:
           PIPELINE_PROBE: ${{ inputs.probe }}
           REORC_PROBE_SQL: ${{ inputs.probe_sql }}
           REORC_PROBE_CONN: ${{ inputs.probe_conn }}
+          REORC_WINDOW_DAYS: ${{ inputs.window_days }}
         run: pnpm --filter pipeline start
 
       - name: Check data changes

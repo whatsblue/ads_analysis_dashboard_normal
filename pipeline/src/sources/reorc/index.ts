@@ -52,7 +52,7 @@ export function createReorcSource(opts: ReorcSourceOptions = {}): Source {
       const target = await discoverReorcTarget(client, log);
       log(`目标：env=${target.envName} conn=${target.connectionName} db=${target.database}`);
 
-      const windowDays = opts.windowDays ?? Number(process.env.REORC_WINDOW_DAYS ?? 10);
+      const windowDays = opts.windowDays ?? (Number(process.env.REORC_WINDOW_DAYS) || 10);
       const end = beijingYesterday();
       const start = addDays(end, -(windowDays - 1));
       log(`滚动窗口：${start} ~ ${end}（${windowDays} 天）`);
