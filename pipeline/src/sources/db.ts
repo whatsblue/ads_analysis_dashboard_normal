@@ -1,11 +1,13 @@
 /**
- * DB 直连通道（降级/备用）：直连数据库只读账号执行口径 SQL。
+ * db 通道（骨架）：数据库直连适配器——ReOrc 平台不可用时的降级通道。
  *
- * 实现状态：接口预留。启用条件：用户提供公网可达的只读连接与表结构说明。
- * 环境变量：DB_URL（如 mysql://readonly:***@host:3306/warehouse）
+ * 环境变量：
+ *   DB_URL   只读连接串（如 mysql://ro_user:***@host:3306/ads_dw?ssl-mode=REQUIRED）
+ *            schema 决定驱动：mysql:// → mysql2；postgres:// → pg
  *
- * 注意：与 ReOrc 通道互为替代，二者产出的 RawDataset 必须通过同一套
- * validate.ts 交叉自洽断言（口径一致性不因通道而异）。
+ * 实现状态：等待用户提供只读账号/地址/表结构后接入（口径 SQL 与 reorc 通道的
+ * queries.ts 模板同源，仅执行端点不同——行映射层完全复用，无需改动）。
+ * 依赖届时按需安装：pnpm --filter pipeline add mysql2 / pg
  */
 import type { RawDataset, Source } from './types';
 
@@ -17,15 +19,23 @@ export class DbConfigError extends Error {
 }
 
 export function createDbSource(): Source {
-  const dbUrl = process.env.DB_URL;
   return {
     kind: 'db',
     async fetch(): Promise<RawDataset> {
-      if (!dbUrl) {
-        throw new DbConfigError('缺少 DB_URL。提供只读连接后启用本通道（见 docs/DATA_CONTRACT.md 与 docs/DEVELOPMENT.md）。');
+      const url = process.env.DB_URL;
+      if (!url) {
+        throw new DbConfigError(
+          '缺少 DB_URL。db 通道需要数据库只读连接串（mysql:// 或 postgres://）；' +
+            '若使用 ReOrc 平台通道请改用 --source=reorc（REORC_TOKEN）。',
+        );
       }
-      // TODO(连接信息就绪后实现)：加载对应驱动 → 执行各维度口径 SQL → aggregate → RawDataset
-      throw new Error('DB 直连通道尚未接入。当前请使用 --source=rdfile 或 --source=reorc。');
+      const kind = url.startsWith('postgres') ? 'pg' : url.startsWith('mysql') ? 'mysql2' : '';
+      if (!kind) throw new DbConfigError(`DB_URL 协议不支持（当前支持 mysql:// 与 postgres://）：${url.slice(0, 20)}...`);
+      // TODO(连接信息就绪后实现)：驱动连接 → 执行 queries.ts 同源 SQL → rowsToDataset
+      throw new Error(
+        'db 通道尚未接入：拿到只读账号与表结构后，复用 reorc/queries.ts 模板与 reorc/rows.ts 行映射实现。' +
+          `（已识别驱动：${kind}）`,
+      );
     },
   };
 }
