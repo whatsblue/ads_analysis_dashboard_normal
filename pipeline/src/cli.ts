@@ -68,10 +68,13 @@ function createSource(kind: SourceKind, input?: string): Source {
 }
 
 /**
- * 探查模式（--probe / PIPELINE_PROBE=true）：列出连接/数据库/表清单后退出，
- * 用于把 queries.ts 的 TODO_* 占位表名替换成真实表名。
- * 表清单查询用 information_schema（PostgreSQL 语法；目标连接 guanyuan_legacy_ods 即 PostgreSQL）。
+ * 探查模式（--probe / PIPELINE_PROBE=true）：遍历全部 SQL 兼容连接，
+ * 列出数据库/表清单，并对表名命中广告/订单关键词的表拉列结构——用于把
+ * queries.ts 的 TODO_* 占位表名替换成真实表名与字段。
+ * information_schema 查询兼容 PostgreSQL/MySQL/Doris（列名统一小写别名）。
  */
+const PROBE_TABLE_PAT = /(ads|_ad_|order|report|trade|gmv|shopify|campaign)/i;
+
 async function probeReorc(): Promise<void> {
   const baseUrl = process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
   const token = process.env.REORC_TOKEN;
@@ -82,30 +85,60 @@ async function probeReorc(): Promise<void> {
   const conns = await client.get<{ items: { id: string; name: string; type?: string }[] }>('/conn/connections', {
     connection_type: 'destination',
   });
-  console.log(`[probe] 连接清单（env=${target.envName}）：`);
-  for (const c of conns.items ?? []) console.log(`  - ${c.name} (${c.type ?? '?'}) id=${c.id}`);
+  const SQL_TYPES = new Set(['MySQL', 'PostgreSQL', 'ClickHouse', 'StarRocks', 'SelectDB(Doris)', 'TiDB', 'Microsoft SQL Server', 'Redshift', 'Apache Impala', 'Google BigQuery']);
+  const sqlConns = (conns.items ?? []).filter((c) => SQL_TYPES.has(c.type ?? ''));
+  console.log(`[probe] SQL 兼容连接：${sqlConns.map((c) => `${c.name}(${c.type})`).join(', ')}`);
 
-  const dbs = extractDatabaseNames(
-    await client.get(`/conn/connections/${target.connectionId}/databases`, { env_id: target.envId }),
-  );
-  console.log(`[probe] ${target.connectionName} 数据库清单：${dbs.join(', ')}`);
-
-  const tables = await client.sqlQueryAll(
-    target.connectionId,
-    'SELECT table_schema, table_name FROM information_schema.tables ' +
-      "WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name",
-    target.database,
-    target.envId,
-  );
-  console.log(`[probe] ${target.connectionName}.${target.database} 表清单（${tables.length} 张）：`);
-  let schema = '';
-  for (const t of tables) {
-    const s = String(t.table_schema);
-    if (s !== schema) {
-      schema = s;
-      console.log(`  [schema ${s}]`);
+  const EXCLUDED_SCHEMAS = "('pg_catalog', 'information_schema', 'mysql', 'performance_schema', 'sys', '__internal_schema')";
+  for (const conn of sqlConns) {
+    let dbs: string[];
+    try {
+      dbs = extractDatabaseNames(
+        await client.get(`/conn/connections/${conn.id}/databases`, { env_id: target.envId }),
+      );
+    } catch (e) {
+      console.log(`[probe] ${conn.name} 数据库列表失败：${e instanceof Error ? e.message : e}`);
+      continue;
     }
-    console.log(`    ${String(t.table_name)}`);
+    for (const db of dbs.slice(0, 5)) {
+      let tables: Record<string, unknown>[];
+      try {
+        tables = await client.sqlQueryAll(
+          conn.id,
+          'SELECT table_schema AS table_schema, table_name AS table_name FROM information_schema.tables ' +
+            `WHERE table_schema NOT IN ${EXCLUDED_SCHEMAS} ORDER BY table_schema, table_name`,
+          db,
+          target.envId,
+        );
+      } catch (e) {
+        console.log(`[probe] ${conn.name}.${db} 表清单失败：${e instanceof Error ? e.message : e}`);
+        continue;
+      }
+      const names = tables.map((t) => `${String(t.table_schema)}.${String(t.table_name)}`);
+      console.log(`[probe] ${conn.name}.${db} 表（${names.length}）：${names.join(', ')}`);
+
+      const hits = tables.filter((t) => PROBE_TABLE_PAT.test(String(t.table_name)));
+      if (hits.length === 0) continue;
+      const inList = hits.map((h) => `'${String(h.table_name).replace(/'/g, "")}'`).join(', ');
+      const cols = await client.sqlQueryAll(
+        conn.id,
+        'SELECT table_name AS table_name, column_name AS column_name, data_type AS data_type ' +
+          'FROM information_schema.columns ' +
+          `WHERE table_schema NOT IN ${EXCLUDED_SCHEMAS} AND table_name IN (${inList}) ` +
+          'ORDER BY table_name, ordinal_position',
+        db,
+        target.envId,
+      );
+      let cur = '';
+      for (const c of cols) {
+        const t = String(c.table_name);
+        if (t !== cur) {
+          cur = t;
+          console.log(`[probe]   .${t} 字段：`);
+        }
+        console.log(`[probe]     ${String(c.column_name)} ${String(c.data_type)}`);
+      }
+    }
   }
 }
 
