@@ -128,13 +128,14 @@ describe('reorc discover', () => {
       token: 't',
       fetchImpl: async (url) => {
         const u = String(url);
-        if (u.includes('/infra/environments')) {
-          return ok({ items: [{ id: 'e1', name: 'Dev' }, { id: 'e2', name: 'Prod' }] });
-        }
+        // 判断顺序由具体到一般：/databases 在 /conn/connections 之前，避免误命中
+        if (u.includes('/databases')) return ok({ databases: ['db_a', 'db_b'] });
         if (u.includes('/conn/connections')) {
           return ok({ items: [{ id: 'c9', name: 's3', type: 'S3' }, { id: 'c1', name: 'doris', type: 'SelectDB(Doris)' }] });
         }
-        if (u.includes('/databases')) return ok({ databases: ['db_a', 'db_b'] });
+        if (u.includes('/infra/environments')) {
+          return ok({ items: [{ id: 'e1', name: 'Dev' }, { id: 'e2', name: 'Prod' }] });
+        }
         throw new Error('unexpected ' + u);
       },
     });
@@ -166,14 +167,15 @@ describe('reorc 组装闭环（mock fetch → validate）', () => {
       token: 't',
       fetchImpl: async (url, init) => {
         const u = String(url);
-        if (u.includes('/infra/environments')) return ok({ items: [{ id: 'e1', name: 'Dev' }] });
-        if (u.includes('/conn/connections')) return ok({ items: [{ id: 'c1', name: 'doris', type: 'SelectDB(Doris)' }] });
-        if (u.includes('/databases')) return ok(['ads_dw']);
+        // 判断顺序由具体到一般：sql-query 与 /databases 先于 /conn/connections
         if (u.includes('sql-query')) {
           const sql = JSON.parse(String(init!.body)).sql as string;
           const rows = topicRows(sql, metaRows, gRows);
           return ok({ columns: rows.length ? Object.keys(rows[0]).map((name) => ({ name })) : [{ name: 'date' }], data: rows.map((r) => Object.values(r)) });
         }
+        if (u.includes('/databases')) return ok(['ads_dw']);
+        if (u.includes('/conn/connections')) return ok({ items: [{ id: 'c1', name: 'doris', type: 'SelectDB(Doris)' }] });
+        if (u.includes('/infra/environments')) return ok({ items: [{ id: 'e1', name: 'Dev' }] });
         throw new Error('unexpected ' + u);
       },
       windowDays: 10,

@@ -58,7 +58,8 @@ export function createReorcClient(opts: ReorcClientOptions): ReorcClient {
   const pageSize = opts.queryPageSize ?? SQL_QUERY_PAGE_SIZE_DEFAULT;
 
   async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, query?: Record<string, string | number>): Promise<T> {
-    const url = new URL(path, opts.baseUrl.endsWith('/') ? opts.baseUrl : opts.baseUrl + '/');
+    // 拼接方式对齐 axios baseURL 语义（path 为绝对路径时 new URL 会丢 base 的路径前缀）
+    const url = new URL(opts.baseUrl.replace(/\/+$/, '') + path);
     if (query) for (const [k, v] of Object.entries(query)) url.searchParams.set(k, String(v));
 
     let lastErr: unknown;
@@ -87,8 +88,9 @@ export function createReorcClient(opts: ReorcClientOptions): ReorcClient {
         }
         return payload.data as T;
       } catch (err) {
-        // 配置类错误（401）不重试；其余记录后按次数重试
+        // 配置错误（401）与业务错误（4xx/code!=0）不重试；仅网络错误、429、5xx 重试
         if (err instanceof ReorcConfigError) throw err;
+        if (err instanceof ReorcApiError && err.status !== 429 && err.status < 500) throw err;
         lastErr = err;
       }
     }
