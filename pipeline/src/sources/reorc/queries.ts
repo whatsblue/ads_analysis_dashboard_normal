@@ -20,6 +20,7 @@
  *   - GMV：amount cnt；EDM：spend
  *   - {{START}}/{{END}} 由渲染时替换（滚动重算窗口）
  */
+import { addDays } from '@ads/shared';
 
 export interface QueryParams {
   start: string;
@@ -51,8 +52,8 @@ const SUB_AGE = `CASE WHEN SUBSTRING(d.created_time, 1, 10) >= DATE_SUB('{{END}}
 /** 创意格式中文 → IMAGE/VIDEO（原型 ctype 口径） */
 const CTYPE = `CASE WHEN f.creative_type LIKE '%视频%' THEN 'VIDEO' WHEN f.creative_type LIKE '%图片%' THEN 'IMAGE'
        ELSE COALESCE(NULLIF(TRIM(f.creative_type), ''), 'OTHER') END`;
-/** 品牌解析（campaign_name 无统一 brand 字段，按命名约定识别） */
-const BRAND = `CASE WHEN LOWER(f.campaign_name) LIKE '%cosy%' THEN 'Cosy' WHEN LOWER(f.campaign_name) LIKE '%bella%' THEN 'Bella' ELSE '其他' END`;
+/** 品牌解析（site 即品牌站名：cosy island / newbella / UNKNOWN） */
+const SITE_BRAND = `CASE WHEN LOWER(site) LIKE '%cosy%' THEN 'Cosy' WHEN LOWER(site) LIKE '%bella%' THEN 'Bella' ELSE '其他' END`;
 
 export const REORC_QUERIES: QueryTopic[] = [
   {
@@ -185,11 +186,11 @@ GROUP BY dt, spu`
   },
   {
     id: 'google_type',
-    desc: 'Google 广告类型×品牌×日（g1；推导 combos；品牌按 campaign_name 约定识别）',
-    sql: (p) => `SELECT f.dt AS date, f.creative_type AS type, ${BRAND} AS brand, ${GOOGLE_MEASURE}
-FROM ${META_BY_AD} f
-WHERE f.platform = 'google' AND f.dt BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY f.dt, f.creative_type, ${BRAND}`
+    desc: 'Google 广告类型×品牌×日（g1；推导 combos；by_ad 表仅覆盖 meta，故用 creative_daily，brand 由品牌站名解析）',
+    sql: (p) => `SELECT dt AS date, creative_type AS type, ${SITE_BRAND} AS brand, ${GOOGLE_MEASURE}
+FROM data_warehouse_prod.ads_marketing_creative_daily
+WHERE platform = 'google' AND dt BETWEEN '{{START}}' AND '{{END}}'
+GROUP BY dt, creative_type, ${SITE_BRAND}`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -222,20 +223,18 @@ GROUP BY platform_paid_date, LOWER(platform)`
   },
   {
     id: 'edm',
-    desc: 'EDM 渠道日花费（dim_edm_ad_fee 为月度账单，按月天数摊到日）',
-    sql: (p) => `SELECT DATE_ADD(DATE_FORMAT(SUBSTRING(f.bill_month, 1, 10), '%Y-%m-01'), INTERVAL s.n - 1 DAY) AS date,
-       SUM(f.ad_fee) / DAY(LAST_DAY(f.bill_month)) AS spend
+    desc: 'EDM 渠道日花费（dim_edm_ad_fee 为月度账单，按 30 天/月近似摊到窗口每日）',
+    sql: (p) => {
+      // 窗口日期在渲染时已知：直接枚举为 UNION ALL 序列，避开平台代理对 DATE_FORMAT/DAY/LAST_DAY 的限制（实测被拒）
+      const days: string[] = [];
+      for (let d = p.start; d <= p.end; d = addDays(d, 1)) days.push(d);
+      const seq = days.map((d) => `SELECT '${d}' AS date`).join(' UNION ALL ');
+      return `SELECT s.date, SUM(f.ad_fee) * 1.0 / 30 AS spend
 FROM data_warehouse_prod.dim_edm_ad_fee f
-CROSS JOIN (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6
-            UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11 UNION ALL SELECT 12
-            UNION ALL SELECT 13 UNION ALL SELECT 14 UNION ALL SELECT 15 UNION ALL SELECT 16 UNION ALL SELECT 17 UNION ALL SELECT 18
-            UNION ALL SELECT 19 UNION ALL SELECT 20 UNION ALL SELECT 21 UNION ALL SELECT 22 UNION ALL SELECT 23 UNION ALL SELECT 24
-            UNION ALL SELECT 25 UNION ALL SELECT 26 UNION ALL SELECT 27 UNION ALL SELECT 28 UNION ALL SELECT 29 UNION ALL SELECT 30
-            UNION ALL SELECT 31) s
-WHERE s.n <= DAY(LAST_DAY(f.bill_month))
-  AND DATE_ADD(DATE_FORMAT(SUBSTRING(f.bill_month, 1, 10), '%Y-%m-01'), INTERVAL s.n - 1 DAY) BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY date`
-      .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
+CROSS JOIN (${seq}) s
+WHERE SUBSTRING(f.bill_month, 1, 7) = SUBSTRING(s.date, 1, 7)
+GROUP BY s.date`;
+    },
   },
 ];
 
