@@ -1,0 +1,149 @@
+name: Update Data
+
+# 数据自动更新：T+1 北京时间 05:00（UTC 21:00）拉取 → 校验 → 拆分 JSON → commit → 部署
+# 依赖 Secrets：REORC_TOKEN（必需）/ REORC_BASE_URL（可选，默认 api.cn.reorc.cloud）
+# 见 docs/SECRETS.md
+on:
+  schedule:
+    - cron: '0 21 * * *' # UTC 21:00 = 北京 05:00
+  workflow_dispatch:
+
+permissions:
+  contents: write # 提交数据文件
+  issues: write # 失败自动开告警 issue
+  pages: write # 数据更新后重新部署
+  id-token: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: 拉数 + 校验 + 提交
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      changed: ${{ steps.data.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pipeline (reorc)
+        env:
+          REORC_BASE_URL: ${{ secrets.REORC_BASE_URL }}
+          REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
+        run: pnpm --filter pipeline start -- --source=reorc
+
+      - name: Check data changes
+        id: data
+        run: |
+          if [ -n "$(git status --porcelain frontend/public/data)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit data
+        if: steps.data.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/data
+          git commit -m "chore(data): auto update via update-data workflow [skip ci]"
+          git push
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '[自动告警] 数据更新管道失败';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'data-update-failure',
+            });
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '数据更新管道执行失败，站点仍使用上一次成功部署的数据。',
+              '',
+              `- 失败运行：${runUrl}`,
+              `- 触发方式：${context.eventName}`,
+              `- 失败时间：${new Date().toISOString()}`,
+              '',
+              '常见原因：',
+              '1. `REORC_TOKEN` 过期 → 本地终端执行 `reorc-cli login` 刷新后更新 Secrets（见 docs/SECRETS.md）',
+              '2. ReOrc 平台数据模型未就绪或口径变更 → 检查 preview-data 输出',
+              '3. 云端 runner 网络可达性 → 手动 Run workflow 复现排查',
+              '',
+              '修复并确认成功后请关闭本 issue。',
+            ].join('\n');
+            if (issues.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['data-update-failure'],
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body,
+              });
+            }
+
+  deploy:
+    name: 数据变更后部署
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 与 deploy.yml 共用 group，互斥防止部署冲突
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm --filter frontend build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
