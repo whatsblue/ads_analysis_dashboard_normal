@@ -117,26 +117,28 @@ async function probeReorc(): Promise<void> {
       const names = tables.map((t) => `${String(t.table_schema)}.${String(t.table_name)}`);
       console.log(`[probe] ${conn.name}.${db} 表（${names.length}）：${names.join(', ')}`);
 
-      const hits = tables.filter((t) => PROBE_TABLE_PAT.test(String(t.table_name)));
-      if (hits.length === 0) continue;
-      const inList = hits.map((h) => `'${String(h.table_name).replace(/'/g, "")}'`).join(', ');
-      const cols = await client.sqlQueryAll(
-        conn.id,
-        'SELECT table_name AS table_name, column_name AS column_name, data_type AS data_type ' +
-          'FROM information_schema.columns ' +
-          `WHERE table_schema NOT IN ${EXCLUDED_SCHEMAS} AND table_name IN (${inList}) ` +
-          'ORDER BY table_name, ordinal_position',
-        db,
-        target.envId,
-      );
-      let cur = '';
-      for (const c of cols) {
-        const t = String(c.table_name);
-        if (t !== cur) {
-          cur = t;
-          console.log(`[probe]   .${t} 字段：`);
+      // 过滤 bak/test 噪音后逐表查列：平台 sql-query 对长 IN 列表会拒绝（实测 60 表名列表失败）
+      const hits = tables.filter((t) => {
+        const n = String(t.table_name);
+        return PROBE_TABLE_PAT.test(n) && !/(bak|test|bushu|new1|_refa)/i.test(n);
+      });
+      for (const h of hits) {
+        const sch = String(h.table_schema).replace(/'/g, '');
+        const name = String(h.table_name).replace(/'/g, '');
+        try {
+          const cols = await client.sqlQueryAll(
+            conn.id,
+            'SELECT column_name AS column_name, data_type AS data_type FROM information_schema.columns ' +
+              `WHERE table_schema = '${sch}' AND table_name = '${name}' ORDER BY ordinal_position`,
+            db,
+            target.envId,
+          );
+          if (cols.length > 0) {
+            console.log(`[probe] ${sch}.${name}: ` + cols.map((c) => `${String(c.column_name)} ${String(c.data_type)}`).join(', '));
+          }
+        } catch (e) {
+          console.log(`[probe] ${sch}.${name} 列查询失败：${e instanceof Error ? e.message : e}`);
         }
-        console.log(`[probe]     ${String(c.column_name)} ${String(c.data_type)}`);
       }
     }
   }
