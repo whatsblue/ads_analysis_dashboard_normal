@@ -47,7 +47,9 @@ jobs:
         env:
           REORC_BASE_URL: ${{ secrets.REORC_BASE_URL }}
           REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
-        run: pnpm --filter pipeline start -- --source=reorc
+          # 通道用环境变量传递：pnpm 12 递归 run 场景下 "--" 传参会拆坏（实测孤立 "-"）
+          PIPELINE_SOURCE: reorc
+        run: pnpm --filter pipeline start
 
       - name: Check data changes
         id: data

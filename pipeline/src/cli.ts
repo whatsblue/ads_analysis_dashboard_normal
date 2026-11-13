@@ -6,6 +6,9 @@
  *   tsx pipeline/src/cli.ts --source=reorc   [--out <dir>] [--dry]
  *   tsx pipeline/src/cli.ts --source=db      [--out <dir>] [--dry]
  *
+ *   CI（pnpm --filter pipeline start）用环境变量 PIPELINE_SOURCE=reorc 传参，
+ *   避免 pnpm 递归 run 场景下 `--` 传参被拆坏（实测 pnpm 12 出现孤立 "-"）
+ *
  * 默认输出目录：frontend/public/data
  * --dry：只拉取+校验，不写盘（本地复现口径问题用）
  */
@@ -25,7 +28,12 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { source: 'rdfile', out: resolve(import.meta.dirname, '../../frontend/public/data'), dry: false };
+  // 通道默认值优先取环境变量（CI 传参通道），CLI flag 仍可覆盖
+  const args: Args = {
+    source: (process.env.PIPELINE_SOURCE as SourceKind) || 'rdfile',
+    out: resolve(import.meta.dirname, '../../frontend/public/data'),
+    dry: false,
+  };
   for (const a of argv) {
     if (a.startsWith('--source=')) args.source = a.slice('--source='.length) as SourceKind;
     else if (a.startsWith('--in=')) args.input = a.slice('--in='.length);
