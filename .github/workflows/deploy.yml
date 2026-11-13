@@ -52,10 +52,8 @@ jobs:
       - name: Build frontend
         run: pnpm --filter frontend build
 
-      # enablement: 仓库 Pages 未开启时自动启用（Source=GitHub Actions）
+      # Pages 站点已通过 API 启用(build_type=workflow)，此处仅读取配置
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
