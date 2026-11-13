@@ -7,7 +7,7 @@
  *   - data_warehouse_prod.ads_marketing_creative_by_ad_daily  广告×日（ad_name/creative_type/creative_code）
  *   - belle_oversea.dim_facebook_ad_info_mapping_current   Meta 广告维表（material_type/kol_name/created_time）
  *   - belle_oversea.ads_ec_mul_platform_sales_daily        易仓已付款订单日汇总（整站 GMV 口径）
- *   - data_warehouse_prod.dim_edm_ad_fee                   EDM 月度账单（月摊日）
+ *   - data_warehouse_prod.dim_edm_ad_fee                   EDM 月度账单（滞后出账，取最新账单月摊 30 天）
  *
  * 口径映射：clicks=platform_link_clicks（链接点击，CVR 分子）、inter=platform_clicks（全部点击）；
  *          Google：vs=attributed_sales（站点归因 GMV）、va=platform_conversion_value（平台后台 GMV）。
@@ -223,7 +223,7 @@ GROUP BY platform_paid_date, LOWER(platform)`
   },
   {
     id: 'edm',
-    desc: 'EDM 渠道日花费（dim_edm_ad_fee 为月度账单，按 30 天/月近似摊到窗口每日）',
+    desc: 'EDM 渠道日花费（dim_edm_ad_fee 为月度账单且滞后出账，取最新账单月总额按 30 天摊到窗口每日）',
     sql: (p) => {
       // 窗口日期在渲染时已知：直接枚举为 UNION ALL 序列，避开平台代理对 DATE_FORMAT/DAY/LAST_DAY 的限制（实测被拒）
       const days: string[] = [];
@@ -232,7 +232,7 @@ GROUP BY platform_paid_date, LOWER(platform)`
       return `SELECT s.date, SUM(f.ad_fee) * 1.0 / 30 AS spend
 FROM data_warehouse_prod.dim_edm_ad_fee f
 CROSS JOIN (${seq}) s
-WHERE SUBSTRING(f.bill_month, 1, 7) = SUBSTRING(s.date, 1, 7)
+WHERE f.bill_month = (SELECT MAX(bill_month) FROM data_warehouse_prod.dim_edm_ad_fee)
 GROUP BY s.date`;
     },
   },
