@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: '0 21 * * *' # UTC 21:00 = 北京 05:00
   workflow_dispatch:
+    inputs:
+      probe:
+        description: '探查模式：列出数仓连接/库/表后退出（不拉数，用于细化 SQL 表名）'
+        type: boolean
+        default: false
 
 permissions:
   contents: write # 提交数据文件
@@ -49,6 +54,7 @@ jobs:
           REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
           # 通道用环境变量传递：pnpm 12 递归 run 场景下 "--" 传参会拆坏（实测孤立 "-"）
           PIPELINE_SOURCE: reorc
+          PIPELINE_PROBE: ${{ inputs.probe }}
         run: pnpm --filter pipeline start
 
       - name: Check data changes

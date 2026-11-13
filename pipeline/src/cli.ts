@@ -14,7 +14,9 @@
  */
 import { resolve } from 'node:path';
 import { createDbSource } from './sources/db';
-import { createReorcSource } from './sources/reorc';
+import { createReorcClient } from './sources/reorc/client';
+import { discoverReorcTarget, extractDatabaseNames } from './sources/reorc/discover';
+import { createReorcSource, REORC_BASE_URL_DEFAULT } from './sources/reorc';
 import { createRdFileSource } from './sources/rdfile';
 import type { Source, SourceKind } from './sources/types';
 import { emitDataset } from './build/emit';
@@ -25,6 +27,7 @@ interface Args {
   input?: string;
   out: string;
   dry: boolean;
+  probe?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -39,6 +42,7 @@ function parseArgs(argv: string[]): Args {
     else if (a.startsWith('--in=')) args.input = a.slice('--in='.length);
     else if (a.startsWith('--out=')) args.out = a.slice('--out='.length);
     else if (a === '--dry') args.dry = true;
+    else if (a === '--probe') args.probe = true;
     else throw new Error(`未知参数：${a}`);
   }
   if (args.source === 'rdfile' && !args.input) {
@@ -63,7 +67,54 @@ function createSource(kind: SourceKind, input?: string): Source {
   }
 }
 
+/**
+ * 探查模式（--probe / PIPELINE_PROBE=true）：列出连接/数据库/表清单后退出，
+ * 用于把 queries.ts 的 TODO_* 占位表名替换成真实表名。
+ * 表清单查询用 information_schema（PostgreSQL 语法；目标连接 guanyuan_legacy_ods 即 PostgreSQL）。
+ */
+async function probeReorc(): Promise<void> {
+  const baseUrl = process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
+  const token = process.env.REORC_TOKEN;
+  if (!token) throw new Error('probe 需要 REORC_TOKEN 环境变量');
+  const client = createReorcClient({ baseUrl, token });
+  const target = await discoverReorcTarget(client, (m) => console.log(`[probe] ${m}`));
+
+  const conns = await client.get<{ items: { id: string; name: string; type?: string }[] }>('/conn/connections', {
+    connection_type: 'destination',
+  });
+  console.log(`[probe] 连接清单（env=${target.envName}）：`);
+  for (const c of conns.items ?? []) console.log(`  - ${c.name} (${c.type ?? '?'}) id=${c.id}`);
+
+  const dbs = extractDatabaseNames(
+    await client.get(`/conn/connections/${target.connectionId}/databases`, { env_id: target.envId }),
+  );
+  console.log(`[probe] ${target.connectionName} 数据库清单：${dbs.join(', ')}`);
+
+  const tables = await client.sqlQueryAll(
+    target.connectionId,
+    'SELECT table_schema, table_name FROM information_schema.tables ' +
+      "WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name",
+    target.database,
+    target.envId,
+  );
+  console.log(`[probe] ${target.connectionName}.${target.database} 表清单（${tables.length} 张）：`);
+  let schema = '';
+  for (const t of tables) {
+    const s = String(t.table_schema);
+    if (s !== schema) {
+      schema = s;
+      console.log(`  [schema ${s}]`);
+    }
+    console.log(`    ${String(t.table_name)}`);
+  }
+}
+
 async function main() {
+  // 探查模式优先：env（CI 通道）或 CLI flag
+  if (process.env.PIPELINE_PROBE === 'true' || process.argv.includes('--probe')) {
+    await probeReorc();
+    return;
+  }
   const args = parseArgs(process.argv.slice(2));
   console.log(`[pipeline] 通道=${args.source}${args.input ? ` in=${args.input}` : ''} out=${args.out}${args.dry ? ' (dry)' : ''}`);
 
