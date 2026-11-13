@@ -87,6 +87,32 @@ async function probeReorc(): Promise<void> {
   const conns = await client.get<{ items: { id: string; name: string; type?: string }[] }>('/conn/connections', {
     connection_type: 'destination',
   });
+
+  // 定向 SQL 模式：REORC_PROBE_SQL 为分号分隔的语句列表（REORC_PROBE_CONN 指定连接，默认 selectdb），
+  // 逐条执行并打印前 20 行——改写取数 SQL 前确认列名/取值范围用，不遍历库表
+  const customSql = process.env.REORC_PROBE_SQL?.trim();
+  if (customSql) {
+    const connName = process.env.REORC_PROBE_CONN || 'selectdb';
+    const conn = (conns.items ?? []).find((c) => c.name === connName);
+    if (!conn) {
+      throw new Error(`定向 probe 找不到连接 ${connName}（可用：${(conns.items ?? []).map((c) => c.name).join(', ')}）`);
+    }
+    const dbs = extractDatabaseNames(await client.get(`/conn/connections/${conn.id}/databases`, { env_id: target.envId }));
+    const db = process.env.REORC_DATABASE || dbs[0];
+    const stmts = customSql.split(';').map((s) => s.trim()).filter(Boolean);
+    console.log(`[probe] 定向模式：conn=${conn.name}(${conn.type}) db=${db} 语句数=${stmts.length}`);
+    for (const [i, sql] of stmts.entries()) {
+      console.log(`[probe] --- SQL#${i + 1} ${sql.slice(0, 160)} ---`);
+      try {
+        const rows = await client.sqlQueryAll(conn.id, sql, db, target.envId);
+        console.log(`[probe] ${rows.length} 行`);
+        for (const r of rows.slice(0, 20)) console.log(`[probe]   ${JSON.stringify(r).slice(0, 800)}`);
+      } catch (e) {
+        console.log(`[probe] 执行失败：${e instanceof Error ? e.message : e}`);
+      }
+    }
+    return;
+  }
   const SQL_TYPES = new Set(['MySQL', 'PostgreSQL', 'ClickHouse', 'StarRocks', 'SelectDB(Doris)', 'TiDB', 'Microsoft SQL Server', 'Redshift', 'Apache Impala', 'Google BigQuery']);
   // Doris/MySQL 数仓层优先（最可能存放加工后的报表表），legacy ODS 最后
   const sqlConns = (conns.items ?? []).filter((c) => SQL_TYPES.has(c.type ?? ''));

@@ -12,6 +12,14 @@ on:
         description: '探查模式：列出数仓连接/库/表后退出（不拉数，用于细化 SQL 表名）'
         type: boolean
         default: false
+      probe_sql:
+        description: '定向探查：分号分隔的 SQL 列表（设置后仅执行这些语句，连接取 probe_conn）'
+        type: string
+        default: ''
+      probe_conn:
+        description: '定向探查使用的连接名（默认 selectdb）'
+        type: string
+        default: ''
 
 permissions:
   contents: write # 提交数据文件
@@ -55,6 +63,8 @@ jobs:
           # 通道用环境变量传递：pnpm 12 递归 run 场景下 "--" 传参会拆坏（实测孤立 "-"）
           PIPELINE_SOURCE: reorc
           PIPELINE_PROBE: ${{ inputs.probe }}
+          REORC_PROBE_SQL: ${{ inputs.probe_sql }}
+          REORC_PROBE_CONN: ${{ inputs.probe_conn }}
         run: pnpm --filter pipeline start
 
       - name: Check data changes
