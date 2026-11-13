@@ -37,6 +37,7 @@ export function validateDataset(ds: RawDataset, opts: ValidateOptions = {}): voi
   GoogleDimSchema.parse(ds.googleDim);
   GoogleDimBucketSchema.parse(ds.googleSpu);
   GoogleTypeSchema.parse(ds.googleType);
+  GoogleDimBucketSchema.parse(ds.googleCmp ?? {});
 
   // 2) 非负断言
   assertNonNegative('channel.meta', ds.channel.meta);

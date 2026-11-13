@@ -135,5 +135,6 @@ export function rdToDataset(rd: RD): RawDataset {
     googleDim,
     googleSpu: rd.gspu,
     googleType,
+    googleCmp: rd.gcmp,
   };
 }

@@ -25,6 +25,7 @@ export function emitDataset(ds: RawDataset, outDir: string): EmitResult {
     ['google/dim.json', ds.googleDim],
     ['google/spu.json', ds.googleSpu],
     ['google/type.json', ds.googleType],
+    ['google/cmp.json', ds.googleCmp ?? {}],
   ];
 
   const files: { path: string; bytes: number }[] = [];

@@ -29,6 +29,8 @@ export interface RawDataset {
   googleDim: GoogleDimData;
   googleSpu: Record<string, GoogleBucket>;
   googleType: GoogleTypeData;
+  /** Google Campaign 日桶（v2 新增；reorc 通道接入前可选，缺失时 emit 写空对象） */
+  googleCmp?: Record<string, GoogleBucket>;
 }
 
 export type SourceKind = 'reorc' | 'db' | 'rdfile';

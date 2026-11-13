@@ -3,7 +3,7 @@
  * 规范文档：docs/DATA_CONTRACT.md。变更需同步文档并 CONTRACT_VERSION +1。
  */
 
-export const CONTRACT_VERSION = 1;
+export const CONTRACT_VERSION = 2;
 
 /** 日期字符串（YYYY-MM-DD） */
 export type DateStr = string;
@@ -106,6 +106,9 @@ export interface GoogleTypeData {
   cmpNames: Record<string, string>;
 }
 
+/** google/cmp.json：Google Campaign 日桶（键=系列名或平台数字 ID；v2 新增，gm2 Campaign 明细用） */
+export type GoogleCmpData = GoogleDimBucket;
+
 /** 数据契约文件名 → 加载器（frontend/src/data 层按此懒加载） */
 export const DATA_FILES = {
   manifest: 'manifest.json',
@@ -121,6 +124,7 @@ export const DATA_FILES = {
   googleDim: 'google/dim.json',
   googleSpu: 'google/spu.json',
   googleType: 'google/type.json',
+  googleCmp: 'google/cmp.json',
 } as const;
 
 export type DataFileKey = keyof typeof DATA_FILES;

@@ -1,7 +1,7 @@
 # 数据契约（Data Contract）
 
 > 本文是 `pipeline`（生产方）与 `frontend`（消费方）之间的唯一契约。任何字段变更必须先改本文并同步双方评审。
-> 版本：v1（对齐原型 `ads_real.js` 的 `window.RD` 结构，2026-11 调研定版）
+> 版本：v2（v1 对齐原型 `ads_real.js` 的 `window.RD` 结构，2026-11 调研定版；v2 新增 `google/cmp.json`）
 
 ## 1. 总则
 
@@ -27,6 +27,7 @@
 | `google/dim.json` | 国家×日 + 年龄×日 | g2/gm6 | ~60KB |
 | `google/spu.json` | Google SPU×日 | gm3 | ~200KB |
 | `google/type.json` | 广告类型组合×日 | g1 | ~80KB |
+| `google/cmp.json` | Google Campaign×日（键=系列名或数字 ID） | gm2 | ~300KB |
 
 前端按视图懒加载（进入 tab 时才 fetch），首屏仅 `manifest + dims + channel`。
 
@@ -139,6 +140,7 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 **google/acc.json**：`{ 账号: { 日期: GoogleCell } }`；**google/spu.json** 同构
 **google/dim.json**：`{ "ctry": {国家: {日期: GoogleCtyCell}}, "age": {年龄段: {日期: GoogleCell}} }`
 **google/type.json**：`{ "typeBrand": { "search|no brand": { 日期: GoogleCell } }, "cmpNames": { "10579": "系列名", "...": "..." } }`
+**google/cmp.json**（v2 新增）：`{ 系列名或数字ID: { 日期: GoogleCell } }`；枚举= dims.gCampaigns，未携带名称映射的数字 ID 原样展示
 
 ## 4. 校验规则（pipeline/src/validate.ts 强制执行）
 

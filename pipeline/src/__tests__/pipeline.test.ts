@@ -72,6 +72,7 @@ describe('rdfile 通道', () => {
       expect(ds.dims.metaAccounts).toEqual(['acc-a', 'acc-b']);
       expect(ds.channel.meta['2026-11-01'].A).toHaveLength(7);
       expect(ds.metaCreative.sub['视频广告'].KOL).toBeTruthy();
+      expect(ds.googleCmp?.['999']?.['2026-11-01']).toHaveLength(6);
       validateDataset(ds); // 不抛错
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -87,8 +88,9 @@ describe('rdfile 通道', () => {
       const ds = rdToDataset(parseRdFile(file));
       const result = emitDataset(ds, out);
       expect(result.files.map((f) => f.path)).toContain('meta/creative.json');
+      expect(result.files.map((f) => f.path)).toContain('google/cmp.json');
       const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
-      expect(manifest.v).toBe(1);
+      expect(manifest.v).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
