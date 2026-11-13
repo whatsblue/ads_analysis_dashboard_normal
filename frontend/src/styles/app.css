@@ -1,4 +1,5 @@
-/* App 壳样式（顶栏 + 一级导航；迁移自原型 header/nav.lv1） */
+/* App 壳样式（header 顶栏；迁移自原型 header 段）。
+   两级导航（nav.lv1 button / .lv2 / .tab-btn）与 .btn 由 dashboard.css 全局提供。 */
 header {
   display: flex;
   justify-content: space-between;
@@ -38,24 +39,4 @@ header .ttl {
   color: #b42318;
   background: #fef3f2;
   border-color: #fecdca;
-}
-nav.lv1 {
-  display: flex;
-  gap: 6px;
-  background: #fff;
-  padding: 8px 18px 0;
-  border-bottom: 1px solid var(--line);
-}
-nav.lv1 .lv1-btn {
-  background: #eef2f8;
-  color: var(--sub);
-  font-size: 13.5px;
-  font-weight: 600;
-  padding: 8px 22px;
-  border-radius: 8px 8px 0 0;
-  text-decoration: none;
-}
-nav.lv1 .lv1-btn.on {
-  background: var(--pri);
-  color: #fff;
 }
