@@ -80,7 +80,9 @@ export async function discoverReorcTarget(client: ReorcClient, log: (msg: string
   const byName = process.env.REORC_CONNECTION_NAME
     ? sqlConns.find((c) => c.name.toLowerCase() === process.env.REORC_CONNECTION_NAME!.toLowerCase())
     : undefined;
-  const conn = byId ?? byName ?? sqlConns[0];
+  // 默认优先 Doris 数仓层（ads_marketing_*/ads_facebook_* 聚合表所在），legacy ODS 只在显式指定时使用
+  const preferred = sqlConns.find((c) => c.type === 'SelectDB(Doris)') ?? sqlConns[0];
+  const conn = byId ?? byName ?? preferred;
   if (byId === undefined && byName === undefined) log(`默认使用连接：${conn.name}（${conn.type}）`);
 
   // 3) 数据库

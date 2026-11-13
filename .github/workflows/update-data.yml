@@ -60,6 +60,9 @@ jobs:
         env:
           REORC_BASE_URL: ${{ secrets.REORC_BASE_URL }}
           REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
+          # 取数目标：selectdb 连接的 data_warehouse_prod（广告聚合层），SQL 内仍带 schema 前缀双保险
+          REORC_CONNECTION_NAME: selectdb
+          REORC_DATABASE: data_warehouse_prod
           # 通道用环境变量传递：pnpm 12 递归 run 场景下 "--" 传参会拆坏（实测孤立 "-"）
           PIPELINE_SOURCE: reorc
           PIPELINE_PROBE: ${{ inputs.probe }}

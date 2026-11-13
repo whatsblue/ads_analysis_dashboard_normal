@@ -200,25 +200,34 @@ describe('reorc 组装闭环（mock fetch → validate）', () => {
   });
 });
 
-/** 按 SQL 特征返回对应主题的行（模拟数仓；特征判断由具体到一般） */
+/** 按 SQL 特征返回对应主题的行（模拟数仓；先按平台字面量分派，再按维度别名细分） */
 function topicRows(sql: string, metaRows: (site: string, acc: string) => Row[], gRows: () => Row[]): Row[] {
   const withDim = (rows: Row[], extra: Record<string, unknown>) => rows.map((r) => ({ ...r, ...extra }));
   const channelMeta: Row[] = [
     { date: '2026-11-09', site: 'shopify', spend: 90, impressions: 900, clicks: 45, orders: 4, value: 220, atc: 9, ckt: 7, inter: 55 },
     { date: '2026-11-10', site: 'shopify', spend: 100, impressions: 1000, clicks: 50, orders: 5, value: 250, atc: 10, ckt: 8, inter: 60 },
   ];
-  if (sql.includes('TODO_google_campaigns')) return [{ campaign_id: 123, campaign_name: 'PMAX Bella' }];
-  if (sql.includes('TODO_meta_ads_daily')) {
+  if (sql.includes('ads_ec_mul_platform_sales_daily')) return [{ date: '2026-11-10', site: 'shopify', amount: 800, cnt: 6 }];
+  if (sql.includes('dim_edm_ad_fee')) return [{ date: '2026-11-10', spend: 12.5 }];
+  if (sql.includes('DISTINCT campaign_id')) return [{ campaign_id: 123, campaign_name: 'PMAX Bella' }];
+  if (sql.includes("'meta'")) {
     if (sql.includes('AS spu')) return withDim(metaRows('shopify', 'acc1'), { spu: 'SKU-A', account: 'acc1' });
     if (sql.includes('AS campaign')) return withDim(metaRows('shopify', 'acc1'), { campaign: 'C1' });
     if (sql.includes('AS ad_name')) return withDim(metaRows('shopify', 'acc1'), { ad_name: 'ad-1', ad_type: 'image', ad_no: 'N01' });
     if (sql.includes('AS account')) return withDim(metaRows('shopify', 'acc1'), { account: 'acc1' });
+    if (sql.includes('AS ctype')) return withDim(metaRows('shopify', 'acc1'), { ctype: 'VIDEO' });
+    if (sql.includes('AS sub2')) return withDim(metaRows('shopify', 'acc1'), { type: '图片', sub2: '新素材' });
+    if (sql.includes('AS sub')) return withDim(metaRows('shopify', 'acc1'), { type: '图片', sub: 'KOL' });
+    if (sql.includes('AS country')) return withDim(metaRows('shopify', 'acc1'), { country: 'US' });
+    if (sql.includes('AS age')) return withDim(metaRows('shopify', 'acc1'), { age: '18-24' });
     return channelMeta;
   }
-  if (sql.includes('campaign_type')) return withDim(gRows(), { type: 'PMAX', brand: 'Bella' });
-  if (sql.includes('TODO_google_ads_daily')) {
+  if (sql.includes("'google'")) {
+    if (sql.includes('AS brand')) return withDim(gRows(), { type: 'PMAX', brand: 'Bella' });
     if (sql.includes('AS spu')) return withDim(gRows(), { spu: 'GSKU' });
     if (sql.includes('AS account')) return withDim(gRows(), { account: 'g1' });
+    if (sql.includes('AS country')) return withDim(gRows(), { country: 'US' });
+    if (sql.includes('AS age')) return withDim(gRows(), { age: '18-24' });
     return gRows();
   }
   return [];
