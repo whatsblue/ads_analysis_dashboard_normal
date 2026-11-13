@@ -23,14 +23,17 @@ jobs:
     name: 拉数 + 校验 + 提交
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # pnpm 12 供应链新政：lockfile 已冻结版本，豁免发布年龄拦截保 CI 稳定
+      npm_config_minimum_release_age: '0'
     outputs:
       changed: ${{ steps.data.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12
+      # action-setup@v4 在当前 runner 上拉取 pnpm 失败，改用 npm 全局安装（runner 自带 node/npm）
+      - name: Setup pnpm
+        run: npm install -g pnpm@12
 
       - uses: actions/setup-node@v4
         with:
@@ -114,6 +117,8 @@ jobs:
     if: needs.update.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      npm_config_minimum_release_age: '0'
     # 与 deploy.yml 共用 group，互斥防止部署冲突
     concurrency:
       group: pages
@@ -124,9 +129,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12
+      # action-setup@v4 在当前 runner 上拉取 pnpm 失败，改用 npm 全局安装（runner 自带 node/npm）
+      - name: Setup pnpm
+        run: npm install -g pnpm@12
 
       - uses: actions/setup-node@v4
         with:
