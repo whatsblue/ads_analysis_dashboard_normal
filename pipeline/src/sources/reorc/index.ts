@@ -38,7 +38,8 @@ export function createReorcSource(opts: ReorcSourceOptions = {}): Source {
   return {
     kind: 'reorc',
     async fetch(): Promise<RawDataset> {
-      const baseUrl = opts.baseUrl ?? process.env.REORC_BASE_URL ?? REORC_BASE_URL_DEFAULT;
+      // 用 || 而非 ??：GitHub 未配置的 Secret 会传入空字符串，需降级到默认地址
+      const baseUrl = opts.baseUrl || process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
       const token = opts.token ?? process.env.REORC_TOKEN;
       if (!token) {
         throw new ReorcConfigError(
