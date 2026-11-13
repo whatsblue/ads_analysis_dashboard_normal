@@ -68,10 +68,10 @@ function createSource(kind: SourceKind, input?: string): Source {
 }
 
 /**
- * 探查模式（--probe / PIPELINE_PROBE=true）：遍历全部 SQL 兼容连接，
- * 列出数据库/表清单，并对表名命中广告/订单关键词的表拉列结构——用于把
- * queries.ts 的 TODO_* 占位表名替换成真实表名与字段。
- * information_schema 查询兼容 PostgreSQL/MySQL/Doris（列名统一小写别名）。
+ * 探查模式（--probe / PIPELINE_PROBE=true）：遍历全部 SQL 兼容连接，列出库/表清单，
+ * 并对广告/订单关键词命中的表 SELECT * LIMIT 2 取样本（列名+首行值）。
+ * 实测：guanyuan(PostgreSQL) 的 information_schema.columns 被平台 sql-query 代理拒绝，
+ * 但真实表 SELECT 与 information_schema.tables 可用；每表逐查耗时高，设 20 分钟预算。
  */
 const PROBE_TABLE_PAT = /(ads|_ad_|order|report|trade|gmv|shopify|campaign)/i;
 
@@ -79,18 +79,22 @@ async function probeReorc(): Promise<void> {
   const baseUrl = process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
   const token = process.env.REORC_TOKEN;
   if (!token) throw new Error('probe 需要 REORC_TOKEN 环境变量');
-  const client = createReorcClient({ baseUrl, token });
+  // 快速失败：15s 超时 + 不重试，避免单表失败拖垮整轮（上轮 30min 超时的教训）
+  const client = createReorcClient({ baseUrl, token, timeoutMs: 15_000, maxRetries: 0 });
   const target = await discoverReorcTarget(client, (m) => console.log(`[probe] ${m}`));
+  const deadline = Date.now() + 20 * 60_000;
 
   const conns = await client.get<{ items: { id: string; name: string; type?: string }[] }>('/conn/connections', {
     connection_type: 'destination',
   });
   const SQL_TYPES = new Set(['MySQL', 'PostgreSQL', 'ClickHouse', 'StarRocks', 'SelectDB(Doris)', 'TiDB', 'Microsoft SQL Server', 'Redshift', 'Apache Impala', 'Google BigQuery']);
+  // Doris/MySQL 数仓层优先（最可能存放加工后的报表表），legacy ODS 最后
   const sqlConns = (conns.items ?? []).filter((c) => SQL_TYPES.has(c.type ?? ''));
-  console.log(`[probe] SQL 兼容连接：${sqlConns.map((c) => `${c.name}(${c.type})`).join(', ')}`);
+  sqlConns.sort((a, b) => (a.type === 'PostgreSQL' ? 1 : 0) - (b.type === 'PostgreSQL' ? 1 : 0));
+  console.log(`[probe] SQL 兼容连接（探查顺序）：${sqlConns.map((c) => `${c.name}(${c.type})`).join(', ')}`);
 
   const EXCLUDED_SCHEMAS = "('pg_catalog', 'information_schema', 'mysql', 'performance_schema', 'sys', '__internal_schema')";
-  for (const conn of sqlConns) {
+  outer: for (const conn of sqlConns) {
     let dbs: string[];
     try {
       dbs = extractDatabaseNames(
@@ -117,27 +121,35 @@ async function probeReorc(): Promise<void> {
       const names = tables.map((t) => `${String(t.table_schema)}.${String(t.table_name)}`);
       console.log(`[probe] ${conn.name}.${db} 表（${names.length}）：${names.join(', ')}`);
 
-      // 过滤 bak/test 噪音后逐表查列：平台 sql-query 对长 IN 列表会拒绝（实测 60 表名列表失败）
-      const hits = tables.filter((t) => {
-        const n = String(t.table_name);
-        return PROBE_TABLE_PAT.test(n) && !/(bak|test|bushu|new1|_refa)/i.test(n);
-      });
+      const hits = tables
+        .filter((t) => {
+          const n = String(t.table_name);
+          return PROBE_TABLE_PAT.test(n) && !/(bak|test|bushu|new1|_refa)/i.test(n);
+        })
+        .slice(0, 40);
       for (const h of hits) {
-        const sch = String(h.table_schema).replace(/'/g, '');
-        const name = String(h.table_name).replace(/'/g, '');
+        if (Date.now() > deadline) {
+          console.log('[probe] 20 分钟预算用尽，提前结束（已收集部分见上）');
+          break outer;
+        }
+        const sch = String(h.table_schema);
+        const name = String(h.table_name);
         try {
-          const cols = await client.sqlQueryAll(
+          const rows = await client.sqlQueryAll(
             conn.id,
-            'SELECT column_name AS column_name, data_type AS data_type FROM information_schema.columns ' +
-              `WHERE table_schema = '${sch}' AND table_name = '${name}' ORDER BY ordinal_position`,
+            `SELECT * FROM ${sch}.${name} LIMIT 2`,
             db,
             target.envId,
           );
-          if (cols.length > 0) {
-            console.log(`[probe] ${sch}.${name}: ` + cols.map((c) => `${String(c.column_name)} ${String(c.data_type)}`).join(', '));
+          if (rows.length > 0) {
+            const cols = Object.keys(rows[0]);
+            console.log(`[probe] ${sch}.${name} 列(${cols.length})：${cols.join(',')}`);
+            console.log(`[probe]   样本：${JSON.stringify(rows[0]).slice(0, 500)}`);
+          } else {
+            console.log(`[probe] ${sch}.${name}：空表`);
           }
         } catch (e) {
-          console.log(`[probe] ${sch}.${name} 列查询失败：${e instanceof Error ? e.message : e}`);
+          console.log(`[probe] ${sch}.${name} 采样失败：${e instanceof Error ? e.message : e}`);
         }
       }
     }
