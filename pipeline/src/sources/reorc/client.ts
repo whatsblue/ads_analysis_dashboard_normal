@@ -52,6 +52,8 @@ export interface ReorcClient {
 const SQL_QUERY_PAGE_SIZE_DEFAULT = 5000;
 
 export function createReorcClient(opts: ReorcClientOptions): ReorcClient {
+  // 归一化：容忍 DevTools 粘贴的 "Bearer xxx" 形式与首尾空白（docs/SECRETS.md 方式 B）
+  const token = opts.token.replace(/^\s*[Bb]earer\s+/, '').trim();
   const doFetch = opts.fetchImpl ?? fetch;
   const timeoutMs = opts.timeoutMs ?? 30_000;
   const maxRetries = opts.maxRetries ?? 2;
@@ -71,7 +73,7 @@ export function createReorcClient(opts: ReorcClientOptions): ReorcClient {
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
-            Authorization: `Bearer ${opts.token}`,
+            Authorization: `Bearer ${token}`,
           },
           body: body === undefined ? undefined : JSON.stringify(body),
           signal: AbortSignal.timeout(timeoutMs),

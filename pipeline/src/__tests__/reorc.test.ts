@@ -23,6 +23,18 @@ describe('reorc client', () => {
     await expect(client.get('/infra/environments')).rejects.toThrow(/reorc-cli login/);
   });
 
+  it('token 容忍 Bearer 前缀与空白（DevTools 粘贴场景）', async () => {
+    const client = createReorcClient({
+      baseUrl: 'https://x/api',
+      token: '  Bearer abc  ',
+      fetchImpl: async (_url, init) => {
+        expect((init!.headers as Record<string, string>).Authorization).toBe('Bearer abc');
+        return ok({});
+      },
+    });
+    await expect(client.get('/projects')).resolves.toEqual({});
+  });
+
   it('业务 code != 0 → ReorcApiError 携带 msg', async () => {
     const client = createReorcClient({
       baseUrl: 'https://x/api',
