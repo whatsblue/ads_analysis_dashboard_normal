@@ -12,8 +12,5 @@
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "dev": "pnpm --filter frontend dev"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "vue-demi"]
   }
 }

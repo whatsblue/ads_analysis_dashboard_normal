@@ -4,6 +4,7 @@ packages:
   - shared
 
 # 允许运行的依赖构建脚本（pnpm >= 10 默认阻止；esbuild 分发二进制、vue-demi 切换 vue3 导出）
-onlyBuiltDependencies:
-  - esbuild
-  - vue-demi
+# pnpm >= 10.26 字段为 allowBuilds（映射式）；旧 onlyBuiltDependencies 已废弃
+allowBuilds:
+  esbuild: true
+  vue-demi: true
