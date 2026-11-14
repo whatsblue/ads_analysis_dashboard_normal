@@ -7,20 +7,20 @@
  *   - data_warehouse_prod.ads_marketing_creative_by_ad_daily  广告×日（ad_name/creative_type/creative_code）
  *   - belle_oversea.dim_facebook_ad_info_mapping_current   Meta 广告维表（material_type/kol_name/created_time）
  *   - belle_oversea.ads_ec_mul_platform_sales_daily        易仓已付款订单日汇总（整站 GMV 口径）
- *   - data_warehouse_prod.dim_edm_ad_fee                   EDM 月度账单（滞后出账，取最新账单月摊 30 天）
+ *   - belle_oversea.ads_shopify_operationdata_edmreport_d  Shopify EDM 归因日销售（utm=Klaviyo，2026-09 起有数）
  *
  * 口径映射：clicks=platform_link_clicks（链接点击，CVR 分子）、inter=platform_clicks（全部点击）；
- *          Google：vs=attributed_sales（站点归因 GMV）、va=platform_conversion_value（平台后台 GMV）。
+ *          Google：clicks=platform_clicks（Google Ads interactions，观远后台口径；数仓 link_clicks 恒 0）、
+ *                  vs=attributed_sales（站点归因 GMV）、va=platform_conversion_value（平台后台 GMV）。
  * 列别名与聚合口径是契约的一部分，调整时**不得改动别名**。
  *
  * 统一约定：
  *   - 维度列：date(YYYY-MM-DD) / site(shopify|shoplazza|unknown) / account / campaign / spu / country / age / type / sub / sub2 / ctype / ad_name / ad_type / ad_no / brand / campaign_id / campaign_name
  *   - Meta 度量：spend impressions clicks orders value atc ckt inter（inter=全部点击/CVR 分母，可为 NULL → 7 元 cell）
  *   - Google 度量：spend impressions clicks orders vs va（vs=站点归因 GMV，va=Ads 后台口径 GMV）；国家桶另有 inter
- *   - GMV：amount cnt；EDM：spend
+ *   - GMV：amount cnt；EDM：value（归因销售额，前端计入转化价值，无广告花费）
  *   - {{START}}/{{END}} 由渲染时替换（滚动重算窗口）
  */
-import { addDays } from '@ads/shared';
 
 export interface QueryParams {
   start: string;
@@ -42,8 +42,8 @@ const META_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS 
        SUM(platform_orders) AS orders, SUM(platform_conversion_value) AS value, SUM(platform_add_to_cart_count) AS atc,
        SUM(platform_checkout_count) AS ckt, SUM(platform_clicks) AS inter`;
 
-/** Google 6 度量（vs=站点归因销售 attributed_sales，va=平台后台口径 platform_conversion_value） */
-const GOOGLE_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions, SUM(platform_link_clicks) AS clicks,
+/** Google 6 度量（clicks=platform_clicks 即 Google Ads interactions，观远后台口径；vs=站点归因 attributed_sales，va=平台后台 platform_conversion_value） */
+const GOOGLE_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions, SUM(platform_clicks) AS clicks,
        SUM(platform_orders) AS orders, SUM(attributed_sales) AS vs, SUM(platform_conversion_value) AS va`;
 
 /** KOL/非KOL 判定与新老素材判定（dim 维表字段） */
@@ -206,7 +206,7 @@ GROUP BY dt, COALESCE(country_code, 'UNKNOWN')`
     id: 'google_age',
     desc: 'Google 年龄×日（gm6；age 表无归因销售，vs 用 sales 近似）',
     sql: (p) => `SELECT dt AS date, age_group AS age, SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions,
-       SUM(platform_link_clicks) AS clicks, SUM(platform_orders) AS orders, SUM(sales) AS vs, SUM(platform_conversion_value) AS va
+       SUM(platform_clicks) AS clicks, SUM(platform_orders) AS orders, SUM(sales) AS vs, SUM(platform_conversion_value) AS va
 FROM data_warehouse_prod.ads_marketing_age_daily
 WHERE platform = 'google' AND dt BETWEEN '{{START}}' AND '{{END}}'
 GROUP BY dt, age_group`
@@ -223,18 +223,12 @@ GROUP BY platform_paid_date, LOWER(platform)`
   },
   {
     id: 'edm',
-    desc: 'EDM 渠道日花费（dim_edm_ad_fee 为月度账单且滞后出账，取最新账单月总额按 30 天摊到窗口每日）',
-    sql: (p) => {
-      // 窗口日期在渲染时已知：直接枚举为 UNION ALL 序列，避开平台代理对 DATE_FORMAT/DAY/LAST_DAY 的限制（实测被拒）
-      const days: string[] = [];
-      for (let d = p.start; d <= p.end; d = addDays(d, 1)) days.push(d);
-      const seq = days.map((d) => `SELECT '${d}' AS date`).join(' UNION ALL ');
-      return `SELECT s.date, SUM(f.ad_fee) * 1.0 / 30 AS spend
-FROM data_warehouse_prod.dim_edm_ad_fee f
-CROSS JOIN (${seq}) s
-WHERE f.bill_month = (SELECT MAX(bill_month) FROM data_warehouse_prod.dim_edm_ad_fee)
-GROUP BY s.date`;
-    },
+    desc: 'EDM 渠道日归因销售额（Shopify 订单 utm=Klaviyo，sales_afterreturn 退货后口径；无广告花费，前端计入转化价值）',
+    sql: (p) => `SELECT sale_date AS date, SUM(sales_afterreturn) AS value
+FROM belle_oversea.ads_shopify_operationdata_edmreport_d
+WHERE sale_date BETWEEN '{{START}}' AND '{{END}}'
+GROUP BY sale_date`
+      .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
 ];
 

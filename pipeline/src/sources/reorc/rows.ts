@@ -238,7 +238,7 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
   }
   for (const row of rows.edm ?? []) {
     const date = dateStr(row.date, 'edm');
-    channel.edm[date] = addInto(channel.edm[date], [num(row.spend)]) as [number];
+    channel.edm[date] = addInto(channel.edm[date], [num(row.value)]) as [number];
   }
 
   // ---- dims 与 manifest ----
