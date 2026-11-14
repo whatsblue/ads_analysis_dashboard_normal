@@ -84,6 +84,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{ link: [label: string] }>();
 
+/** 占比开关跨页保留（原型 tables[id].pctOn 全局持久：页签切换/筛选重渲染不丢勾选，路由重建也不重置） */
+const PCT_STATE = new Map<string, boolean>();
+
 const filter = useFilterStore();
 
 /* ================= 内部状态（行数据变化时重置，对齐原型重渲染语义） ================= */
@@ -91,7 +94,8 @@ const sortCol = ref<string | null>(props.sortCol);
 const sortDir = ref<'desc' | 'asc'>(props.sortDir);
 const limit = ref(10);
 const expanded = ref<Record<string, 1>>({});
-const pctOn = ref(!props.noPct && !!PCT_DEF[props.tid]);
+const pctOn = ref(props.noPct ? false : (PCT_STATE.get(props.tid) ?? !!PCT_DEF[props.tid]));
+watch(pctOn, (v) => PCT_STATE.set(props.tid, v));
 
 watch(
   () => props.rows,

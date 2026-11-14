@@ -3,7 +3,7 @@
  * Meta · 商品投产（原型 renderM3）：SPU 排行全量进表（初始 Top10 加载更多）；
  * 有筛选=所选项合计，无筛选=全量合计；SPU 筛选即时生效。
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { zero } from '@ads/shared';
 import { useDataStore } from '@/stores/data';
 import { useFilterStore } from '@/stores/filter';
@@ -24,6 +24,18 @@ onMounted(async () => {
 
 const spuSel = ref<string[]>([]);
 const spuExcl = ref(false);
+
+/** SPU 候选（站点/账号联动，原型 spuCandidates REAL 语义）：已选项不在新候选范围时级联剔除 */
+const spuCand = computed<string[]>(() => {
+  void filter.applied.version;
+  return data.spuCandidates();
+});
+watch(spuCand, (cand) => {
+  if (spuSel.value.length) {
+    const kept = spuSel.value.filter((s) => cand.includes(s));
+    if (kept.length !== spuSel.value.length) spuSel.value = kept;
+  }
+});
 
 const spuRows = computed<TableRow[]>(() => {
   void filter.applied.version;
@@ -59,7 +71,7 @@ const totalRows = computed<TableRow[]>(() => {
     <div class="ptitle">
       <h2>◎ 商品投产</h2>
       <span class="frow">
-        <MultiDropdown all-name="SPU" :items="data.spus" :selected="spuSel" :excl="spuExcl" clearable @change="(sel, ex) => { spuSel = sel; spuExcl = ex; }" />
+        <MultiDropdown all-name="SPU" :items="spuCand" :selected="spuSel" :excl="spuExcl" clearable @change="(sel, ex) => { spuSel = sel; spuExcl = ex; }" />
       </span>
     </div>
 

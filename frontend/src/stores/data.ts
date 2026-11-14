@@ -126,6 +126,8 @@ export const useDataStore = defineStore('data', () => {
   const metaCampaigns = computed(() => dims.value?.metaCampaigns ?? []);
   const gCampaigns = computed(() => dims.value?.gCampaigns ?? []);
   const spus = computed(() => dims.value?.spus ?? []);
+  /** SPU→投放账号映射（m3 账号联动；meta_spu 窗口行推导） */
+  const spuAccs = computed(() => dims.value?.spuAccs ?? {});
   /** SPU=UNKNOWN（未归属产品聚合行）不入枚举 */
   const gSpus = computed(() => (dims.value?.gSpus ?? []).filter((k) => !/^unknown$/i.test(k)));
   const countries = computed(() => dims.value?.countries ?? []);
@@ -425,6 +427,31 @@ export const useDataStore = defineStore('data', () => {
     return o[nm] ?? zero();
   }
 
+  /** m3 SPU 候选（原型 spuCandidates REAL 语义）：站点/账号联动——
+   *  已选账号时仅保留其投放过的 SPU（spuAccs 交集）；站点检查桶内所选站点花费>0 */
+  function spuCandidates(): string[] {
+    return memo('spuCand', () => {
+      const sites = filter.siteKeys;
+      const accs = filter.applied.metaAccounts;
+      return spus.value.filter((s) => {
+        if (accs && accs.length) {
+          const a = spuAccs.value[s];
+          if (!a || !a.some((x) => accs.includes(x))) return false;
+        }
+        const byD = metaSpuB?.[s];
+        if (!byD) return false;
+        for (const dt in byD) {
+          const bk = byD[dt];
+          for (const st of sites) {
+            const v = bk[st as keyof typeof bk];
+            if (v && v[0] > 0) return true;
+          }
+        }
+        return false;
+      });
+    });
+  }
+
   /* ================= 素材效率（m4） ================= */
 
   /** ad 级日取数（adList 索引；账号筛选不适用：ad 表无账号维） */
@@ -523,6 +550,7 @@ export const useDataStore = defineStore('data', () => {
     metaCampaigns,
     gCampaigns,
     spus,
+    spuAccs,
     gSpus,
     countries,
     ages,
@@ -558,6 +586,7 @@ export const useDataStore = defineStore('data', () => {
     adMetrics,
     adAgg,
     collectTop,
+    spuCandidates,
     subRows,
     subDay,
     totalOf,
