@@ -13,8 +13,12 @@ pnpm --filter frontend dev      # 本地开发 http://localhost:5173（base 已�
 pnpm -r typecheck           # 全部包 tsc --noEmit
 pnpm -r test                # Vitest（shared 指标口径 + frontend 关键组件）
 pnpm --filter frontend build    # 产出 frontend/dist
-pnpm --filter pipeline start -- --source=rdfile --in <ads_real.js>   # 管道（rdfile 通道）
-pnpm --filter pipeline start -- --source=reorc                      # 管道（ReOrc 通道，需环境变量）
+pnpm --filter pipeline start -- --source=rdfile --in <ads_real.js>   # 管道（rdfile 原型种子通道，迁移期）
+
+# 管道主通道（ReOrc，需 Secrets/环境变量）
+REORC_BASE_URL=... REORC_TOKEN=... pnpm --filter pipeline start -- --source=reorc
+# 可选 REORC_WINDOW_DAYS=90：拉取 90 天窗口（回填演练；默认 10 天）
+# 可选 REORC_PROBE_SQL（分号分隔）+ REORC_PROBE_CONN：只读探查，每条 SQL 打印前 20 行，不改代码即可验证数仓
 ```
 
 ## 3. Git 规范
@@ -40,6 +44,8 @@ git worktree add d:/ai/adn_wt_cicd      -b feat/cicd-deploy
 
 合并顺序：`feat/cicd-deploy` → `feat/data-pipeline` → `feat/dashboard`，每步要求 CI 绿。worktree 使用完毕 `git worktree remove <dir>` 清理。
 
+> **当前状态（2026-11-14）**：三个 feat 分支已全部合并入 main 且线上验证通过；worktree 目录（`adn_wt_dashboard/pipeline/cicd`）与远端三分支待收尾清理（等用户确认后执行）。后续日常开发直接在 main 或按需新建 feature 分支。
+
 ### 3.2 提交信息
 
 Conventional Commits：`feat|fix|refactor|docs|chore|data: 摘要`。数据自动提交统一 `data: T+1 update <YYYY-MM-DD>`（由管道生成，跳过 CI 的重型 job）。
@@ -56,6 +62,7 @@ Conventional Commits：`feat|fix|refactor|docs|chore|data: 摘要`。数据自�
 - 所有派生指标（ROAS/CVR/CPM/CPC/CTR/CPA/AOV/占比）**只能**从 `@ads/shared` 的 `derive/deriveG` 获取。code review 硬标准：视图代码出现任何 `/`、`*1000` 等比率计算公式一律打回。
 - 总计行用 `sumMetrics` 后 `derive`（Σ分子/Σ分母），禁止对派生指标求平均。
 - 涨跌色阈值（原型定版）：钱效率组（cvr/roas/aov 含 roas_s/roas_a）>5% 高亮；Meta 流量效率组（cpm/cpc/ctr）>10% 高亮；涨绿跌红。
+- **源口径映射（queries.ts 头注释为准，2026-11 观远口径对齐定版）**：Meta 桶 8 元组 clicks=链接点击（platform_link_clicks，CVR 分子）、inter=全部点击（platform_clicks，CVR 分母）；Google 全主题 clicks=platform_clicks（Ads 后台口径；数仓 link_clicks 对 google 恒 0，禁用）、vs=attributed_sales（Shopify 考核）、va=platform_conversion_value（Ads 参考）；EDM=Shopify 订单 Klaviyo 归因销售额（`ads_shopify_operationdata_edmreport_d` 的 SUM(sales_afterreturn)，2026-09 起有数，非订阅账单费用）。列别名是 rows.ts 契约，不可改动。
 
 ### 4.2 前端
 
@@ -82,12 +89,18 @@ Conventional Commits：`feat|fix|refactor|docs|chore|data: 摘要`。数据自�
 
 ## 6. 数据问题排查
 
-1. 看板数据异常 → 查 `manifest.json` genAt → 对应 Actions run 日志
+1. 看板数据异常 → 查线上 `data/manifest.json` genAt → 对应 Actions run 日志
 2. Actions 失败会自动开 Issue；ReOrc token 过期类错误按 Issue 内指引刷新 Secrets
 3. 本地复现：`pnpm --filter pipeline start -- --source=rdfile --in <本地ads_real.js> --out <临时目录>`
+4. 手动演练拉数：Actions 页 `update-data.yml` → Run workflow（可填 `window_days` 拉大窗口）
+5. 部署后线上 5-20 分钟内 CDN（Fastly）才完成传播，genAt 未变先等待再排查；部署 job checkout 的是 origin/main 最新，与触发 push 的 SHA 可能相差一个数据 commit
+6. 数仓锚点直查（不动代码）：设置 `REORC_PROBE_SQL` + `REORC_PROBE_CONN` 派发探查 run（见 §2）
 
-## 7. 实施前提与协作事项（Phase 1 进行中滚动更新）
+## 7. 当前实施状态（2026-11-14 滚动更新）
 
-- [ ] ReOrc token 刷新：用户在本地终端 `reorc-cli login` 后提供可用 token（配 Secrets `REORC_TOKEN`、`REORC_BASE_URL`）
-- [ ] GitHub 仓库 Settings → Pages → Source: GitHub Actions（一次性）
-- [ ] （可选）DB 直连信息：只读账号 + 公网地址（启用 `--source=db` 时需要）
+- [x] ReOrc 通道上线：每日 cron（北京 05:00）拉数→校验→commit→自动部署 Pages，失败自动开 Issue
+- [x] 线上看板验证闭环：genAt 演进、19/19 主题有数、数据锚点与数仓 SUM 逐位一致（11/11 PASS）
+- [x] 指标口径观远对齐：Google clicks=platform_clicks、EDM=Klaviyo 归因销售额（详见 §4.1 与 docs/PRODUCT.md §6）
+- [x] 全历史数据验证：2025-01-01 起覆盖完整、质量零缺陷（报告：`_wt_staging/data-verify-report.md`）
+- [ ] 月度分片全历史方案（方案已定：23+ 月分片按需加载 + 滚动重写最近 3 个月 + 一次性按月回填，待实施）
+- [ ] worktree 与三个已合并 feat 分支清理（等用户确认）
