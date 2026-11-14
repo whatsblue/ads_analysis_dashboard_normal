@@ -56,6 +56,10 @@ button {
   border-bottom: 1px solid var(--line);
   box-shadow: 0 2px 6px rgba(30, 50, 90, 0.05);
 }
+/* 按钮与 .dd/.switch 同级底对齐：dd/switch 有 6px 底 padding，按钮补同值使底边与下拉按钮对齐（图1 红线定版） */
+.filter-bar > .btn {
+  margin-bottom: 6px;
+}
 .fd {
   display: flex;
   flex-direction: column;
@@ -990,6 +994,12 @@ tr.exp-row td {
   align-items: center;
   margin-left: auto;
 }
+/* 插槽有筛选器时（如 Campaign 明细 ddCmp）：筛选器紧贴右侧 pct/导出组，
+取消两者的 auto——否则三个 auto 均分剩余空间，筛选器悬在中间而非最右（对齐原型 margin-left:auto 单点推右） */
+.card-h .card-h-extra:has(*):not(:empty) ~ .pct-tgl,
+.card-h .card-h-extra:has(*):not(:empty) ~ .exp-btn {
+  margin-left: 0;
+}
 .card-h .pct-tgl + .exp-btn,
 .pct-tgl ~ .exp-btn {
   margin-left: 0;
@@ -1177,6 +1187,11 @@ tr.exp-row td {
   border-left: 4px solid var(--pri);
   padding: 2px 0 2px 12px;
   margin: 4px 0 14px;
+}
+/* 原型 .ptitle h2：清 UA 默认上下 margin（否则标题区多占约 32px，图3 定版） */
+.ptitle h2 {
+  margin: 0;
+  font-size: 16.5px;
 }
 .ptitle .desc {
   font-size: 12px;

@@ -27,26 +27,47 @@ onMounted(async () => {
   ready.value = true;
 });
 
-/* ================= 趋势对比（原型 renderM5T） ================= */
+/* ================= 趋势对比（原型 renderM5T；2026-11-14 用户定版：去卡头粒度切换固定按日，指标支持多选多线） ================= */
 
-const trendM = ref('spend');
+const trendMs = ref<string[]>(['spend']);
 const trendA = ref('United States');
 const trendB = ref('非美国');
-const gran = ref<'day' | 'month' | 'year'>('day');
 const ddOpen = ref<'' | 'm' | 'a' | 'b'>('');
 
 function ctyLbl(nm: string): string {
-  if (nm === data.usKey) return 'United States';
+  if (nm === data.usKey) return 'US';
   return nm === '非美国' ? 'Non-US' : nm;
 }
 
-/** 地区聚合：'非美国'=全部国家合计−美国（data.ctyAgg） */
+/** 地区聚合：'非美国'=全部国家合计−美国（data.ctyAgg）；显示名→内部键归一（US/United States） */
 function ctyAggDay(d: string, nm: string): Metrics {
-  const key = nm === 'Non-US' ? '非美国' : nm === 'United States' ? data.usKey : nm;
+  const key = nm === 'Non-US' || nm === '非美国' ? '非美国' : nm === 'US' || nm === 'United States' ? data.usKey : nm;
   return data.ctyAgg(data.metaDimDate('ctry', d), key);
 }
 
-const metDef = computed(() => CTY_TREND_METRICS.find((x) => x.k === trendM.value) || CTY_TREND_METRICS[0]);
+const metDefs = computed(() => CTY_TREND_METRICS.filter((m) => trendMs.value.includes(m.k)));
+
+const trendTitle = computed(() => (metDefs.value.length ? metDefs.value.map((m) => m.name).join('/') : CTY_TREND_METRICS[0].name) + '趋势对比');
+
+const metricBtnText = computed(() => {
+  const names = metDefs.value.map((m) => m.name);
+  return names.length ? names.slice(0, 2).join(',') + (names.length > 2 ? ' 等' + names.length + '项' : '') : '选择指标';
+});
+
+/** 指标多选 toggle（点击不关面板，外点关闭）；至少保留一项 */
+function toggleMetric(k: string): void {
+  if (trendMs.value.includes(k)) {
+    if (trendMs.value.length === 1) return;
+    trendMs.value = trendMs.value.filter((x) => x !== k);
+  } else {
+    trendMs.value = [...trendMs.value, k];
+  }
+}
+
+/** 国家下拉显示名（美国用简称 US，2026-11-14 用户定版；仅影响显示，选中值仍为原始键） */
+function ctySelLb(k: string): string {
+  return k === data.usKey ? 'US' : k;
+}
 
 const regionOpts = computed(() => ['非美国', data.usKey, ...data.countries.filter((c) => c !== data.usKey)]);
 
@@ -54,10 +75,11 @@ const trendOpt = computed(() => {
   void filter.applied.version;
   const names = [trendA.value, trendB.value];
   const labels = names.map(ctyLbl);
+  const defs = metDefs.value.length ? metDefs.value : [CTY_TREND_METRICS[0]];
   const order: string[] = [];
   const bk: Record<string, Record<string, Metrics>> = {};
   for (const d of dateRange(filter.applied.start, filter.applied.end)) {
-    const k = bucketKey(d, gran.value);
+    const k = bucketKey(d, 'day');
     if (!bk[k]) {
       bk[k] = {};
       order.push(k);
@@ -67,20 +89,28 @@ const trendOpt = computed(() => {
       addMetrics(t, ctyAggDay(d, nm));
     }
   }
-  const colors = ['#5470c6', '#91cc75'];
-  const series = labels.map((lb, i) => ({
-    name: lb,
-    type: 'line' as const,
-    smooth: true,
-    symbol: 'circle',
-    symbolSize: 5,
-    itemStyle: { color: colors[i] },
-    lineStyle: { width: 2 },
-    data: order.map((k) => {
-      const v = (derive(bk[k][names[i]]) as unknown as Record<string, number>)[metDef.value.k];
-      return v == null || isNaN(v) ? null : +v.toFixed(2);
+  const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#5470c6', '#91cc75', '#fac858'];
+  /* 线序：先指标后地区（同一指标的两地区线相邻成组）；多指标时线名带指标前缀区分 */
+  const fmtMap: Record<string, (v: number) => string> = {};
+  const series = defs.flatMap((md, mi) =>
+    labels.map((lb, ri) => {
+      const name = defs.length > 1 ? md.name + '·' + lb : lb;
+      fmtMap[name] = md.fmt;
+      return {
+        name,
+        type: 'line' as const,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 5,
+        itemStyle: { color: colors[(mi * 2 + ri) % colors.length] },
+        lineStyle: { width: 2 },
+        data: order.map((k) => {
+          const v = (derive(bk[k][names[ri]]) as unknown as Record<string, number>)[md.k];
+          return v == null || isNaN(v) ? null : +v.toFixed(2);
+        }),
+      };
     }),
-  }));
+  );
   return {
     tooltip: {
       trigger: 'axis',
@@ -88,13 +118,14 @@ const trendOpt = computed(() => {
         if (!ps.length) return '';
         let h = '<b>' + (ps[0].axisValueLabel || ps[0].name || '') + '</b>';
         for (const p of ps) {
+          const fmt = fmtMap[p.seriesName];
           h += '<div style="margin-top:2px">' + p.marker + ' ' + p.seriesName +
-            '<span style="float:right;margin-left:24px;font-weight:600">' + (p.value == null ? '—' : metDef.value.fmt(p.value)) + '</span></div>';
+            '<span style="float:right;margin-left:24px;font-weight:600">' + (p.value == null || !fmt ? '—' : fmt(p.value)) + '</span></div>';
         }
         return h;
       },
     },
-    legend: { data: labels, top: 0 },
+    legend: { data: series.map((s) => s.name), top: 0 },
     grid: { left: 56, right: 20, top: 30, bottom: 26 },
     xAxis: { type: 'category', data: order },
     yAxis: { type: 'value', scale: true },
@@ -117,13 +148,14 @@ const cAgg = computed<Record<string, Metrics>>(() => {
 
 const usRows = computed<TableRow[]>(() => {
   void filter.applied.version;
+  const us = ctyLbl(data.usKey);
   const rows = [
-    { label: 'United States', m: cAgg.value[data.usKey] || zero() },
+    { label: us, m: cAgg.value[data.usKey] || zero() },
     { label: 'Non-US', m: data.ctyAgg(cAgg.value, '非美国') },
   ];
   return withCmps(rows, (r, _i, rg) => {
     const o = data.metaDimRange('ctry', rg.start, rg.end);
-    return r.label === 'United States' ? o[data.usKey] || zero() : data.ctyAgg(o, '非美国');
+    return r.label === us ? o[data.usKey] || zero() : data.ctyAgg(o, '非美国');
   });
 });
 
@@ -159,16 +191,11 @@ const ctyRows = computed<TableRow[]>(() => {
 
     <div class="card">
       <div class="card-h">
-        <span>{{ metDef.name }}趋势对比</span>
+        <span>{{ trendTitle }}</span>
         <span style="display: flex; gap: 6px; align-items: center; font-weight: 400">
-          <span class="seg mini">
-            <button v-for="g in (['day', 'month', 'year'] as const)" :key="g" :class="{ on: gran === g }" @click="gran = g">
-              {{ g === 'day' ? '按日' : g === 'month' ? '按月' : '按年' }}
-            </button>
-          </span>
-          <span class="dd"><button @click.stop="ddOpen = ddOpen === 'm' ? '' : 'm'">{{ metDef.name }}</button>
+          <span class="dd"><button @click.stop="ddOpen = ddOpen === 'm' ? '' : 'm'">{{ metricBtnText }}</button>
             <div v-if="ddOpen === 'm'" class="dd-panel cty-panel" @click.stop>
-              <div v-for="m in CTY_TREND_METRICS" :key="m.k" class="cty-opt" :class="{ on: trendM === m.k }" @click="trendM = m.k; ddOpen = ''">{{ m.name }}</div>
+              <div v-for="m in CTY_TREND_METRICS" :key="m.k" class="cty-opt" :class="{ on: trendMs.includes(m.k) }" @click="toggleMetric(m.k)">{{ m.name }}</div>
             </div></span>
           <span class="dd"><button @click.stop="ddOpen = ddOpen === 'a' ? '' : 'a'">{{ ctyLbl(trendA) }}</button>
             <div v-if="ddOpen === 'a'" class="dd-panel cty-panel" @click.stop>
@@ -212,6 +239,8 @@ const ctyRows = computed<TableRow[]>(() => {
           :selected="ctySel"
           :excl="ctyExcl"
           clearable
+          allow-all
+          :label-fn="ctySelLb"
           :empty-text="() => (ctyTop5.length ? ctyTop5.slice(0, 2).join(',') + (ctyTop5.length > 2 ? ' 等' + ctyTop5.length + '项' : '') : '全部国家')"
           @change="(sel, ex) => { ctySel = sel; ctyExcl = ex; }"
         />

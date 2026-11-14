@@ -162,16 +162,15 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
       </div>
     </div>
 
-    <div class="fd dd">
-      <b>销售站点</b>
-      <MultiDropdown
-        :items="SITES"
-        :selected="d.siteSel"
-        :excl="d.siteExcl"
-        all-name="站点"
-        @change="(sel, excl) => ((d.siteSel = sel), (d.siteExcl = excl))"
-      />
-    </div>
+    <!-- label 走 MultiDropdown 根（.dd.fd 合一，对齐原型 ddSite）：外层再包 .fd.dd 会双层 padding-bottom 导致底对齐错位 -->
+    <MultiDropdown
+      label="销售站点"
+      :items="SITES"
+      :selected="d.siteSel"
+      :excl="d.siteExcl"
+      all-name="站点"
+      @change="(sel, excl) => ((d.siteSel = sel), (d.siteExcl = excl))"
+    />
 
     <div class="fd dd dd-acc" :class="{ open: accOpen }">
       <b>广告账号</b>

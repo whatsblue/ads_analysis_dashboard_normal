@@ -19,7 +19,8 @@ const openIx = ref(-1); // 展开日历的周期下标
 watch(
   () => props.open,
   (o) => {
-    if (o) openIx.value = -1;
+    /* 打开弹窗即展开第一个周期日历（自定义周期需手动改日期，免多一次点击；2026-11-14 用户定版） */
+    if (o) openIx.value = d.cmpT === 'custom' ? 0 : -1;
   },
 );
 
@@ -42,6 +43,8 @@ const cpR = computed<CmpRange[]>(() => {
 function setType(t: CmpType): void {
   d.cmpT = t;
   d.cmpEd = null;
+  /* 切到自定义周期时自动展开第一个日历，其余类型收起 */
+  openIx.value = t === 'custom' ? 0 : -1;
 }
 
 function setN(n: number): void {

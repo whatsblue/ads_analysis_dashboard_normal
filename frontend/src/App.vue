@@ -74,8 +74,22 @@ const calRangeTxt = computed(() => {
 });
 const calOpen = ref(false);
 
+/* 切页签滚回该页顶部（原型单页 setTab 无此问题，SPA 路由保留滚动位需显式归零） */
+function scrollTop(): void {
+  window.scrollTo(0, 0);
+}
+
 function goTab(tab: string): void {
-  void router.push(`/${activeLv1.value}/${tab}`);
+  const to = `/${activeLv1.value}/${tab}`;
+  if (route.path === to) return;
+  void router.push(to);
+  scrollTop();
+}
+
+function goLv1(to: string): void {
+  if (route.path === to) return;
+  void router.push(to);
+  scrollTop();
 }
 
 onMounted(async () => {
@@ -101,7 +115,7 @@ onMounted(async () => {
   <div class="topbar">
     <FilterBar v-if="inited" />
     <nav class="lv1">
-      <button v-for="l in LV1" :key="l.key" type="button" :class="{ on: activeLv1 === l.key }" @click="router.push(l.to)">
+      <button v-for="l in LV1" :key="l.key" type="button" :class="{ on: activeLv1 === l.key }" @click="goLv1(l.to)">
         {{ l.label }}
       </button>
     </nav>

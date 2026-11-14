@@ -190,12 +190,13 @@ export const useDataStore = defineStore('data', () => {
     adList.value.forEach((a, i) => m.set(a[0], i));
     return m;
   });
-  /** 美国键运行时探测（真实数据 'United States'；演示枚举 'United States of America'） */
+  /** 美国键运行时探测（v4 分片国家键=ISO 代码 'US'；全名键兼容旧数据与演示枚举） */
   const usKey = computed(() => {
     const cs = countries.value;
+    if (cs.includes('US')) return 'US';
     if (cs.includes('United States')) return 'United States';
     if (cs.includes('United States of America')) return 'United States of America';
-    return 'United States';
+    return 'US';
   });
 
   /* ================= 基础取数 helper ================= */

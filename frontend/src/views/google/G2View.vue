@@ -45,6 +45,11 @@ const ctyRows = computed<TableRow[]>(() => {
   rows.sort((x, y) => y.m.spend - x.m.spend);
   return withCmps(rows, (r, _i, rg) => data.gCtyRange(r.label, rg.start, rg.end));
 });
+
+/** 国家下拉显示名（美国用简称 US，与 Meta 国家维度一致；仅影响显示，选中值仍为原始键） */
+function ctySelLb(k: string): string {
+  return k === data.usKey ? 'US' : k;
+}
 </script>
 
 <template>
@@ -58,6 +63,8 @@ const ctyRows = computed<TableRow[]>(() => {
           :selected="ctySel"
           :excl="ctyExcl"
           clearable
+          allow-all
+          :label-fn="ctySelLb"
           :empty-text="() => (ctyTop5.length ? ctyTop5.slice(0, 2).join(',') + (ctyTop5.length > 2 ? ' 等' + ctyTop5.length + '项' : '') : '全部国家')"
           @change="(sel, ex) => { ctySel = sel; ctyExcl = ex; }"
         />

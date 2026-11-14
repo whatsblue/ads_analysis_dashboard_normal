@@ -20,8 +20,10 @@ const props = withDefaults(
     labelFn?: (it: string) => string;
     /** 面板最小宽（跟随按钮场景） */
     panelMinWidth?: number;
+    /** 条数选择器提供「全部」（国家等百级全量筛选场景） */
+    allowAll?: boolean;
   }>(),
-  { allName: '', label: '', clearable: false, panelMinWidth: 300 },
+  { allName: '', label: '', clearable: false, panelMinWidth: 300, allowAll: false },
 );
 
 const emit = defineEmits<{ change: [sel: string[], excl: boolean] }>();
@@ -56,8 +58,10 @@ function lb(it: string): string {
 }
 
 const matches = computed(() => props.items.filter((it) => kwMatch(q.value, lb(it))));
-const pages = computed(() => Math.max(1, Math.ceil(matches.value.length / size.value)));
+/* size=0 为「全部」不分页（allowAll 场景），大列表（数千广告系列）不提供避免渲染卡顿 */
+const pages = computed(() => (size.value > 0 ? Math.max(1, Math.ceil(matches.value.length / size.value)) : 1));
 const slice = computed(() => {
+  if (size.value <= 0) return matches.value;
   const p = Math.min(page.value, pages.value);
   return matches.value.slice((p - 1) * size.value, p * size.value);
 });
@@ -167,6 +171,7 @@ const pasteCustom = ref('');
             <button :disabled="page >= pages" @click="pageNav(1)">›</button>
           </span>
           <select class="pg-size" v-model.number="size" @change="page = 1">
+            <option v-if="props.allowAll" :value="0">全部</option>
             <option :value="10">10 条/页</option>
             <option :value="20">20 条/页</option>
             <option :value="50">50 条/页</option>

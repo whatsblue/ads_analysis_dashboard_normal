@@ -187,7 +187,8 @@ function ovExport(): void {
         <span>大盘总览</span>
         <button class="btn xs exp-btn" @click="ovExport">⇩ 导出</button>
       </div>
-      <div class="card-b tbl-scroll">
+      <!-- 对齐原型 ovWrap：card-b 无 tbl-scroll（表短无滚动，无 sticky 表头遮挡首行） -->
+      <div class="card-b">
         <table class="matrix">
           <thead>
             <tr><th>渠道</th><th>花费</th><th>GMV</th><th>GMV占比</th><th>ROAS</th></tr>
@@ -203,7 +204,6 @@ function ovExport(): void {
             <tr v-for="r in ov.rows" :key="r.nm">
               <td>
                 <span class="chip" :class="CH_CLS[r.nm]">{{ r.nm }}</span>
-                <span v-if="r.nm === 'EDM'" class="chip e">无广告花费</span>
               </td>
               <td><div class="dv"><span>{{ r.paid ? fmtMoney(r.m.spend) : '—' }}</span></div></td>
               <td><div class="dv"><span>{{ fmtMoney(r.m.value) }}</span></div></td>
@@ -243,7 +243,6 @@ function ovExport(): void {
     >
       <template #first="{ row }">
         <span class="chip" :class="CH_CLS[String(row.ch)]">{{ row.label }}</span>
-        <span v-if="row.ch === 'EDM'" class="chip e">无广告花费</span>
       </template>
     </MetricsTable>
   </template>
