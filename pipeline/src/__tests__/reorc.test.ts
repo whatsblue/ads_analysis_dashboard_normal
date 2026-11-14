@@ -114,15 +114,15 @@ describe('reorc rows 映射', () => {
       {
         meta_spu: [{ date: '2026-11-10', spu: 'SKU-A', account: 'acc1', site: 'shopify', spend: 1, impressions: 1, clicks: 1, orders: 1, value: 1, atc: 1, ckt: 1, inter: 1 }],
         meta_ad: [{ date: '2026-11-10', ad_name: 'ad-1', ad_type: 'image', ad_no: 'N01', site: 'shopify', spend: 1, impressions: 1, clicks: 1, orders: 1, value: 1, atc: 1, ckt: 1, inter: 1 }],
-        google_type: [{ date: '2026-11-10', type: 'PMAX', brand: 'Bella', spend: 2, impressions: 2, clicks: 2, orders: 2, vs: 2, va: 2 }],
+        google_type: [{ date: '2026-11-10', type: 'pmax', brand: 'brand', spend: 2, impressions: 2, clicks: 2, orders: 2, vs: 2, va: 2, inter: 7 }],
         google_cmp: [{ campaign_id: 123, campaign_name: 'PMAX Bella' }],
       },
       { genAt: '2026-11-11 05:00', start: '2026-11-01', end: '2026-11-10', scope: 'test' },
     );
     expect(ds.dims.spuAccs).toEqual({ 'SKU-A': ['acc1'] });
     expect(ds.dims.adList).toEqual([['ad-1', 'image', 'N01']]);
-    expect(ds.dims.combos).toEqual([['PMAX', 'Bella']]);
-    expect(ds.googleType.typeBrand['PMAX|Bella']!['2026-11-10']).toEqual([2, 2, 2, 2, 2, 2]);
+    expect(ds.dims.combos).toEqual([['pmax', 'brand']]);
+    expect(ds.googleType.typeBrand['pmax|brand']!['2026-11-10']).toEqual([2, 2, 2, 2, 2, 2, 7]);
     expect(ds.googleType.cmpNames['123']).toBe('PMAX Bella');
   });
 
@@ -171,8 +171,8 @@ describe('reorc 组装闭环（mock fetch → validate）', () => {
       { date: '2026-11-10', site, account: acc, spend: 100, impressions: 1000, clicks: 50, orders: 5, value: 250, atc: 10, ckt: 8, inter: 60 },
     ];
     const gRows = (): Row[] => [
-      { date: '2026-11-09', spend: 70, impressions: 1800, clicks: 35, orders: 3, vs: 280, va: 260 },
-      { date: '2026-11-10', spend: 80, impressions: 2000, clicks: 40, orders: 4, vs: 320, va: 300 },
+      { date: '2026-11-09', spend: 70, impressions: 1800, clicks: 35, orders: 3, vs: 280, va: 260, inter: 66 },
+      { date: '2026-11-10', spend: 80, impressions: 2000, clicks: 40, orders: 4, vs: 320, va: 300, inter: 72 },
     ];
 
     const source = createReorcSource({
@@ -222,8 +222,9 @@ function topicRows(sql: string, metaRows: (site: string, acc: string) => Row[], 
     if (sql.includes('AS age')) return withDim(metaRows('shopify', 'acc1'), { age: '18-24' });
     return channelMeta;
   }
-  if (sql.includes("'google'")) {
-    if (sql.includes('AS brand')) return withDim(gRows(), { type: 'PMAX', brand: 'Bella' });
+  // v4：google_type 换源 deep_dive，WHERE 不再含 'google' 字面量，按表名补充分派
+  if (sql.includes("'google'") || sql.includes('ads_google_deep_dive_daily')) {
+    if (sql.includes('AS brand')) return withDim(gRows(), { type: 'pmax', brand: 'brand' });
     if (sql.includes('AS spu')) return withDim(gRows(), { spu: 'GSKU' });
     if (sql.includes('AS account')) return withDim(gRows(), { account: 'g1' });
     if (sql.includes('AS country')) return withDim(gRows(), { country: 'US' });

@@ -59,6 +59,7 @@ const brandRows = computed<TableRow[]>(() => {
   const rows = [
     { key: 'brand', label: 'brand', m: aggBrand(src, 'brand') },
     { key: 'no brand', label: 'no brand', m: aggBrand(src, 'no brand') },
+    { key: 'unknown', label: 'unknown', m: aggBrand(src, 'unknown') },
   ];
   return withCmps(rows, (r, _i, rg) => aggBrand(data.gRowsRange(rg.start, rg.end, ''), String(r.key)));
 });

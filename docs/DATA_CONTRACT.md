@@ -1,7 +1,8 @@
 # 数据契约（Data Contract）
 
 > 本文是 `pipeline`（生产方）与 `frontend`（消费方）之间的唯一契约。任何字段变更必须先改本文并同步双方评审。
-> 版本：v3（v1 对齐原型 `ads_real.js` 的 `window.RD`；v2 新增 `google/cmp.json`；v3 改为月度分片 `months/<YYYY-MM>.json`，2026-11-14）
+> 版本：v4（v1 对齐原型 `ads_real.js` 的 `window.RD`；v2 新增 `google/cmp.json`；v3 改为月度分片 `months/<YYYY-MM>.json`；
+> v4 Google 行集 7 元化（第 7 位=unified_interactions）+orders 改 unified_orders+google_type 换源 deep_dive+全 SQL 收敛 shopify 站点，2026-11-14 三方核对对齐观远）
 
 ## 1. 总则
 
@@ -49,10 +50,11 @@ TypeScript 权威定义在 `shared/src/contract.ts`（前端与管道共用包�
 ```
 MetaCell   = [spend, impressions, clicks, orders, value, atc, ckt, (inter?)]
              8 元组；inter 为可选第 8 位（=全部点击，CVR 分母口径），仅部分桶携带
-GoogleCell = [spend, impressions, clicks, orders, vs, va]
-             6 元组；vs=Shopify 口径转化价值, va=Ads 后台口径转化价值
+GoogleCell = [spend, impressions, clicks, orders, vs, va, (inter?)]
+             6/7 元组；vs=Shopify 口径转化价值, va=Ads 后台口径转化价值；
+             v4：channel/acc/spu/type/ctry 恒 7 元（第 7 位=unified_interactions，CVR 分母），age 恒 6 元
 GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
-             7 元组（Google 国家桶）；inter=unified_interactions（CVR 分母）
+             7 元组（Google 国家桶）；与 GoogleCell 7 元同构
 ```
 
 字段语义（与原型 `zero()/cell7()/g6()` 一一对应）：
@@ -62,19 +64,19 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 | spend | number | 花费（USD） | |
 | impressions | number | 展示量 | |
 | clicks | number | 点击量 | Meta=inline_link_clicks（观远商品投产口径） |
-| orders | number | 订单数 | |
+| orders | number | 订单数 | Meta=platform_orders；Google=unified_orders（站点归因，v4 对齐观远）；Google 年龄桶=platform_orders（与观远年龄表一致） |
 | value | number | 转化价值（GMV） | Meta；Google 侧 value=vs |
 | atc | number | 加购数 | Meta 专属 |
 | ckt | number | 结账数 | Meta 专属 |
 | vs | number | Google·Shopify 口径 GMV | |
 | va | number | Google·Ads 后台口径 GMV | |
-| inter | number? | CVR 分母 | Meta 桶=全部点击；Google 国家桶=unified_interactions |
+| inter | number? | CVR 分母 | Meta 桶=全部点击；Google 桶=unified_interactions（归因访问用户数；v4 起 acc/spu/type/ctry 全携带，age 除外） |
 
 ### 3.2 manifest.json
 
 ```jsonc
 {
-  "v": 3,                        // 契约版本，与 shared/src/contract.ts 的 CONTRACT_VERSION 一致
+  "v": 4,                        // 契约版本，与 shared/src/contract.ts 的 CONTRACT_VERSION 一致
   "genAt": "2026-11-14 05:10",   // 管道生成时间（展示为"数据更新"badge）
   "months": ["2026-01", "2026-02", "..."],  // 月分片月列表（升序；前端按需加载 months/<m>.json）
   "range": { "min": "2026-01-01", "max": "2026-11-11",
@@ -147,9 +149,9 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 
 **meta/ad.json**：`{ 序号字符串: { 日期: {站点|A: MetaCell} } }`（序号 = dims.adList 数组下标）
 
-**google/acc.json**：`{ 账号: { 日期: GoogleCell } }`；**google/spu.json** 同构
-**google/dim.json**：`{ "ctry": {国家: {日期: GoogleCtyCell}}, "age": {年龄段: {日期: GoogleCell}} }`
-**google/type.json**：`{ "typeBrand": { "search|no brand": { 日期: GoogleCell } }, "cmpNames": { "10579": "系列名", "...": "..." } }`
+**google/acc.json**：`{ 账号: { 日期: GoogleCell } }`（7 元含 inter）；**google/spu.json**、channel.google、google/type.json 同构（7 元）
+**google/dim.json**：`{ "ctry": {国家: {日期: GoogleCtyCell}}, "age": {年龄段: {日期: GoogleCell}} }`（age 恒 6 元）
+**google/type.json**：`{ "typeBrand": { "search|no brand": { 日期: GoogleCell } }, "cmpNames": { "10579": "系列名", "...": "..." } }`（v4 换源 deep_dive：type 键小写 search/shopping/pmax/demandgen/display/unknown，brand 键=brand/no brand/unknown）
 **google/cmp.json**（v2 新增）：`{ 系列名或数字ID: { 日期: GoogleCell } }`；枚举= dims.gCampaigns，未携带名称映射的数字 ID 原样展示
 
 ## 4. 校验规则（pipeline/src/validate.ts 强制执行；v3 逐月分片运行）
@@ -159,7 +161,7 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
    - Σ(meta/acc 各账号某日 A.spend) == channel.meta[某日].A.spend
    - Σ(meta/spu 各 SPU 某日 A.value) ≈ channel.meta[某日].A.value（SPU 维有 unknown 归集，允许 ±2% 漂移，超限告警不阻断）
    - Σ(google/type 各组合某日 spend) == channel.google[某日].spend
-3. **非负**：所有桶数值 ≥ 0；orders>0 而 spend==0 的行保留（口径：零花费有订单行保留以保证总计=全量）。
+3. **非负**：计数/花费位严格 ≥0；GMV 金额位允许为负（v4：Meta 位 4=value、Google 位 4=vs/5=va——站点退款/取消回溯修正，2026-11-03 google vs=-21.26 实测）；orders>0 而 spend==0 的行保留（口径：零花费有订单行保留以保证总计=全量）。
 4. **日期连续性**：range 内允许缺天（无投放），但 manifest.range.min/max 必须覆盖所有键。
 5. **A 键校验**：任一分站点之和与 A 差异 > 0.01 视为管道 bug。
 

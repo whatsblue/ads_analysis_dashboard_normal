@@ -104,6 +104,17 @@ export function validateDataset(ds: RawDataset, opts: ValidateOptions = {}): voi
   }
 }
 
+/** v4：GMV 金额位允许为负（站点退款/取消回溯修正，2026-11-03 google vs=-21.26 实测）；
+ *  计数/花费位仍严格非负。Meta cell 位 4=value；Google cell 位 4=vs、5=va。 */
+function isGmvLeaf(path: string): boolean {
+  const m = /\[(\d+)\]$/.exec(path);
+  if (!m) return false;
+  const idx = Number(m[1]);
+  if (path.startsWith('channel.meta')) return idx === 4;
+  if (path.startsWith('channel.google')) return idx === 4 || idx === 5;
+  return false;
+}
+
 function pickSamples(sorted: string[]): string[] {
   if (sorted.length <= 3) return sorted;
   return [sorted[0], sorted[Math.floor(sorted.length / 2)], sorted[sorted.length - 1]];
@@ -112,7 +123,7 @@ function pickSamples(sorted: string[]): string[] {
 function assertNonNegative(path: string, obj: unknown, depth = 0): void {
   if (depth > 6) return;
   if (typeof obj === 'number') {
-    if (obj < 0) throw new Error(`非负断言失败：${path} = ${obj}`);
+    if (obj < 0 && !isGmvLeaf(path)) throw new Error(`非负断言失败：${path} = ${obj}`);
     return;
   }
   if (Array.isArray(obj)) {

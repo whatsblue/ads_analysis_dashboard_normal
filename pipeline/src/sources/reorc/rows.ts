@@ -64,6 +64,11 @@ function googleCell(row: Row): GoogleCell {
   return [num(row.spend), num(row.impressions), num(row.clicks), num(row.orders), num(row.vs), num(row.va)];
 }
 
+/** Google 行 → 7 元 cell（v4：第 7 位 = unified_interactions；age 仍走 googleCell 6 元） */
+function googleCell7(row: Row): GoogleCell {
+  return [...googleCell(row), num(row.inter)];
+}
+
 /** 同索引累加，长度取 max（7+8 → 8） */
 function addInto(dst: number[] | undefined, src: number[]): number[] {
   if (!dst) return src.slice();
@@ -183,16 +188,17 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
   }
 
   // ---- Google 系列 ----
+  // v4：channel/acc/spu/type/ctry 行集 7 元（第 7 位 = unified_interactions）；age 保持 6 元（age 表无 unified_interactions）
   for (const row of rows.google_channel ?? []) {
     const date = dateStr(row.date, 'google_channel');
-    channel.google[date] = addInto(channel.google[date], googleCell(row)) as GoogleCell;
+    channel.google[date] = addInto(channel.google[date], googleCell7(row)) as GoogleCell;
   }
   for (const row of rows.google_acc ?? []) {
     const account = str(row.account);
     seen.gAccounts.add(account);
     const b = googleBucketOf(googleAcc, account);
     const date = dateStr(row.date, 'google_acc');
-    b[date] = addInto(b[date], googleCell(row)) as GoogleCell;
+    b[date] = addInto(b[date], googleCell7(row)) as GoogleCell;
   }
   for (const row of rows.google_cmp ?? []) {
     googleType.cmpNames[str(row.campaign_id)] = str(row.campaign_name);
@@ -203,21 +209,21 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     seen.gSpus.add(spu);
     const b = googleBucketOf(googleSpu, spu);
     const date = dateStr(row.date, 'google_spu');
-    b[date] = addInto(b[date], googleCell(row)) as GoogleCell;
+    b[date] = addInto(b[date], googleCell7(row)) as GoogleCell;
   }
   for (const row of rows.google_type ?? []) {
     const key = `${str(row.type)}|${str(row.brand)}`;
     seen.combos.add(key);
     const b = googleBucketOf(googleType.typeBrand, key);
     const date = dateStr(row.date, 'google_type');
-    b[date] = addInto(b[date], googleCell(row)) as GoogleCell;
+    b[date] = addInto(b[date], googleCell7(row)) as GoogleCell;
   }
   for (const row of rows.google_ctry ?? []) {
     const country = str(row.country);
     seen.countries.add(country);
     const b = googleBucketOf(googleDim.ctry, country);
     const date = dateStr(row.date, 'google_ctry');
-    b[date] = addInto(b[date], [...googleCell(row), num(row.inter)]) as GoogleCell;
+    b[date] = addInto(b[date], googleCell7(row)) as GoogleCell;
   }
   for (const row of rows.google_age ?? []) {
     const age = str(row.age);

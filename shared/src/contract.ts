@@ -3,7 +3,7 @@
  * 规范文档：docs/DATA_CONTRACT.md。变更需同步文档并 CONTRACT_VERSION +1。
  */
 
-export const CONTRACT_VERSION = 3;
+export const CONTRACT_VERSION = 4;
 
 /** 日期字符串（YYYY-MM-DD） */
 export type DateStr = string;
@@ -14,10 +14,11 @@ export type SiteKey = 'shopify' | 'shoplazza' | 'unknown';
 /** Meta 基础桶：[spend, impressions, clicks, orders, value, atc, ckt, (inter?)] */
 export type MetaCell = number[];
 
-/** Google 基础桶：[spend, impressions, clicks, orders, vs, va]（vs=Shopify 口径 GMV, va=Ads 后台口径 GMV） */
+/** Google 基础桶：6 元 [spend, impressions, clicks, orders, vs, va]（vs=Shopify 口径 GMV, va=Ads 后台口径 GMV；age 桶恒 6 元）；
+ *  v4 起 channel/acc/spu/type/ctry 行集为 7 元，第 7 位 = unified_interactions（CVR 分母），orders 改 unified_orders 口径 */
 export type GoogleCell = number[];
 
-/** Google 国家桶（7 元，第 7 位 = unified_interactions，CVR 分母） */
+/** Google 国家桶（7 元，与 GoogleCell 7 元同构） */
 export type GoogleCtyCell = number[];
 
 /** GMV 桶：[金额, 订单数] */

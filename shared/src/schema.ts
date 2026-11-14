@@ -8,7 +8,8 @@ import { CONTRACT_VERSION } from './contract';
 const num = z.number().finite();
 
 export const MetaCellSchema = z.array(num).min(7).max(8);
-export const GoogleCellSchema = z.array(num).length(6);
+/** v4：Google 行集 7 元化（channel/acc/spu/type/ctry），age 桶恒 6 元 */
+export const GoogleCellSchema = z.array(num).min(6).max(7);
 export const GoogleCtyCellSchema = z.array(num).length(7);
 export const GmvCellSchema = z.array(num).length(2);
 export const EdmCellSchema = z.array(num).length(1);
