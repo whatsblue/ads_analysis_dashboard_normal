@@ -13,6 +13,7 @@ import {
   type Manifest,
   type MetaCreativeData,
   type MetaDimData,
+  monthsCover,
 } from '@ads/shared';
 import type { RawDataset, Source } from './types';
 
@@ -79,6 +80,7 @@ export function rdToDataset(rd: RD): RawDataset {
   const manifest: Manifest = {
     v: CONTRACT_VERSION,
     genAt: rd.genAt,
+    months: monthsCover(rd.range.min, rd.range.max),
     range: rd.range,
     scope: rd.scope,
   };

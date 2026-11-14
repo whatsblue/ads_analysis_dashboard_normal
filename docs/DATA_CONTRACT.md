@@ -1,35 +1,44 @@
 # 数据契约（Data Contract）
 
 > 本文是 `pipeline`（生产方）与 `frontend`（消费方）之间的唯一契约。任何字段变更必须先改本文并同步双方评审。
-> 版本：v2（v1 对齐原型 `ads_real.js` 的 `window.RD` 结构，2026-11 调研定版；v2 新增 `google/cmp.json`）
+> 版本：v3（v1 对齐原型 `ads_real.js` 的 `window.RD`；v2 新增 `google/cmp.json`；v3 改为月度分片 `months/<YYYY-MM>.json`，2026-11-14）
 
 ## 1. 总则
 
 - 所有数据文件为 UTF-8 JSON，输出目录：`frontend/public/data/`，部署后 URL 前缀 `/ads_analysis_dashboard_normal/data/`（Pages 子路径）。
-- 管道每次全量重算并滚动更新最近 10 个自然日（对齐原型口径：日业务数据 T+1 05:00 前同步，历史回填收敛）。
-- 文件级原子性：任一文件生成失败则本次更新整体失败，不提交半成品。
+- v3 月度分片：回填起点 2026-01-01，按自然月切片逐月拉取（月内字段与单窗口口径完全一致），每日 T+1 05:00 全量幂等重生成（历史月份迟到回传随同步收敛）。
+- 文件级原子性：任一文件生成失败则本次更新整体失败，不提交半成品；每月分片生成时即跑校验（月窗口伪 manifest）。
 - 数值精度：金额保留原始精度（不做四舍五入），比率类指标一律由前端 `shared/metrics.ts` 现算，**数据文件只存基础桶，不存派生指标**（指标一致性根因约束）。
 
 ## 2. 文件清单
 
-| 文件 | 内容 | 消费视图（原型 tab） | 估算体积 |
-|---|---|---|---|
-| `manifest.json` | 版本/生成时间/日期范围/口径说明 | 全局（badge、日期边界） | <1KB |
-| `dims.json` | 全部维度枚举 | 全局筛选器 + 各 tab | ~250KB |
-| `channel.json` | 渠道日汇总 + 整站 GMV + EDM | 渠道归因总览(ov) | ~60KB |
-| `meta/acc.json` | Meta 账号×日 | m1/m2/m3 | ~120KB |
-| `meta/camp.json` | Meta 广告系列×日 | m2 | ~1.2MB |
-| `meta/spu.json` | Meta SPU×日 | m3 | ~500KB |
-| `meta/dim.json` | 国家×日 + 年龄×日 | m5/m6 | ~800KB |
-| `meta/creative.json` | 素材类型分桶 sub/sub2/ctype | m4 | ~300KB |
-| `meta/ad.json` | Top 广告×日（adList 3000 条） | m4 下钻 | ~3MB |
-| `google/acc.json` | Google 账号×日 | gm1/gm2/gm3 | ~10KB |
-| `google/dim.json` | 国家×日 + 年龄×日 | g2/gm6 | ~60KB |
-| `google/spu.json` | Google SPU×日 | gm3 | ~200KB |
-| `google/type.json` | 广告类型组合×日 | g1 | ~80KB |
-| `google/cmp.json` | Google Campaign×日（键=系列名或数字 ID） | gm2 | ~300KB |
+| 文件 | 内容 | 估算体积 |
+|---|---|---|
+| `manifest.json` | 版本/生成时间/月份列表/日期范围/口径说明 | <1KB |
+| `dims.json` | 全部维度枚举（全窗口并集） | ~300KB |
+| `months/<YYYY-MM>.json` | 单自然月全部日粒度结构（MonthSlice：channel + 11 个维度桶） | 3~8MB/月 |
 
-前端按视图懒加载（进入 tab 时才 fetch），首屏仅 `manifest + dims + channel`。
+前端按需加载：首屏 `manifest + dims`，之后每次筛选区间/环比变化时加载所需月份并集（`frontend/src/data/merge.ts` 深合并重建内存桶，与 v2 单快照同构）；切日期时可能短暂显示加载遮罩。
+
+MonthSlice 结构（权威定义 `shared/src/contract.ts`）：
+
+```
+month        YYYY-MM（冗余存文件内，加载校验用）
+channel      { meta, google, gmv, edm } 渠道日汇总（含整站 GMV 与 EDM）
+metaAcc      账号×日（站点桶）
+metaCamp     广告系列×日
+metaSpu      SPU×日
+metaDim      { ctry, age }
+metaCreative { sub, sub2, ctype }
+metaAd       广告×日（键=adList 下标字符串）
+googleAcc    账号×日
+googleDim    { ctry, age }
+googleSpu    SPU×日
+googleType   { typeBrand, cmpNames }
+googleCmp    Campaign×日
+```
+
+（各桶内部结构见 §3.4/§3.5，与 v2 逐文件字段完全一致，仅容器键名从文件名变为 MonthSlice 字段名。）
 
 ## 3. 类型定义
 
@@ -65,10 +74,11 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 
 ```jsonc
 {
-  "v": 1,                        // 契约版本，与 shared/src/contract.ts 的 CONTRACT_VERSION 一致
-  "genAt": "2026-11-07 16:43",   // 管道生成时间（展示为"数据更新"badge）
-  "range": { "min": "2026-09-01", "max": "2026-11-06",
-             "viewStart": "2026-10-26", "viewEnd": "2026-11-01" },  // view* =默认选中区间
+  "v": 3,                        // 契约版本，与 shared/src/contract.ts 的 CONTRACT_VERSION 一致
+  "genAt": "2026-11-14 05:10",   // 管道生成时间（展示为"数据更新"badge）
+  "months": ["2026-01", "2026-02", "..."],  // 月分片月列表（升序；前端按需加载 months/<m>.json）
+  "range": { "min": "2026-01-01", "max": "2026-11-11",
+             "viewStart": "2026-11-05", "viewEnd": "2026-11-11" },  // view* =默认选中区间（数据末 7 天）
   "scope": "Meta×(shopify+shoplazza) + Google×shopify；TikTok/Snapchat、Google×shoplazza 未接入；口径=unified"
 }
 ```
@@ -142,7 +152,7 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 **google/type.json**：`{ "typeBrand": { "search|no brand": { 日期: GoogleCell } }, "cmpNames": { "10579": "系列名", "...": "..." } }`
 **google/cmp.json**（v2 新增）：`{ 系列名或数字ID: { 日期: GoogleCell } }`；枚举= dims.gCampaigns，未携带名称映射的数字 ID 原样展示
 
-## 4. 校验规则（pipeline/src/validate.ts 强制执行）
+## 4. 校验规则（pipeline/src/validate.ts 强制执行；v3 逐月分片运行）
 
 1. **结构**：所有文件符合上述 schema（zod schema 定义于 `shared/src/contract.ts`）。
 2. **交叉自洽**（容差 0.01）：
@@ -156,5 +166,11 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 ## 5. 变更流程
 
 1. 修改 `shared/src/contract.ts` + 本文档，`CONTRACT_VERSION` +1；
-2. manifest.v 与前端运行时校验不匹配时，前端顶栏提示"数据契约已升级，请刷新"；
+2. manifest.v 与前端运行时校验不匹配时，前端顶栏提示“数据契约已升级，请刷新”；
 3. 管道与前端同 PR 合并（或先合管道保持向后兼容新增字段，再合前端消费）。
+
+## 6. v3 加载语义（frontend/src/data + stores/data）
+
+- 首屏：manifest（版本校验）→ dims → `ensureForRange()`（默认区间∪环比所需月份并行拉取，`mergeSlices` 深合并重建全部内存桶）。
+- 筛选应用（version++）→ watch 触发 `ensureForRange()` 增量补载缺失月份；加载期间 `rangeReady=false`，App 层显示遮罩。
+- 已加载月份缓存于内存 Map；重复切换区间不再重复请求。`?v=<genAt>` 查询串保证内容变更后长缓存失效。

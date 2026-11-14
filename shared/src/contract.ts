@@ -3,7 +3,7 @@
  * 规范文档：docs/DATA_CONTRACT.md。变更需同步文档并 CONTRACT_VERSION +1。
  */
 
-export const CONTRACT_VERSION = 2;
+export const CONTRACT_VERSION = 3;
 
 /** 日期字符串（YYYY-MM-DD） */
 export type DateStr = string;
@@ -44,8 +44,10 @@ export type GoogleCtyDimBucket = Record<string, GoogleCtyBucket>;
 export interface Manifest {
   v: number;
   genAt: string;
-  range: { min: DateStr; max: DateStr; viewStart: DateStr; viewEnd: DateStr };
   scope: string;
+  /** v3 月度分片月列表（升序 YYYY-MM；前端按需加载 months/<m>.json） */
+  months: string[];
+  range: { min: DateStr; max: DateStr; viewStart: DateStr; viewEnd: DateStr };
 }
 
 /** 广告清单条目：[广告名, 素材类型, 素材编号] */
@@ -109,22 +111,28 @@ export interface GoogleTypeData {
 /** google/cmp.json：Google Campaign 日桶（键=系列名或平台数字 ID；v2 新增，gm2 Campaign 明细用） */
 export type GoogleCmpData = GoogleDimBucket;
 
-/** 数据契约文件名 → 加载器（frontend/src/data 层按此懒加载） */
+/** v3 月度分片（months/<YYYY-MM>.json）：单自然月全部日粒度结构；
+ *  dims 枚举（账号/系列/SPU 等）在全局 dims.json，不随分片重复 */
+export interface MonthSlice {
+  month: string;
+  channel: ChannelData;
+  metaAcc: MetaDimBucket;
+  metaCamp: MetaDimBucket;
+  metaSpu: MetaDimBucket;
+  metaDim: MetaDimData;
+  metaCreative: MetaCreativeData;
+  metaAd: MetaDimBucket;
+  googleAcc: GoogleDimBucket;
+  googleDim: GoogleDimData;
+  googleSpu: GoogleDimBucket;
+  googleType: GoogleTypeData;
+  googleCmp: GoogleCmpData;
+}
+
+/** v3 全局文件（月分片文件由加载器按 manifest.months 拼 URL，不在此表） */
 export const DATA_FILES = {
   manifest: 'manifest.json',
   dims: 'dims.json',
-  channel: 'channel.json',
-  metaAcc: 'meta/acc.json',
-  metaCamp: 'meta/camp.json',
-  metaSpu: 'meta/spu.json',
-  metaDim: 'meta/dim.json',
-  metaCreative: 'meta/creative.json',
-  metaAd: 'meta/ad.json',
-  googleAcc: 'google/acc.json',
-  googleDim: 'google/dim.json',
-  googleSpu: 'google/spu.json',
-  googleType: 'google/type.json',
-  googleCmp: 'google/cmp.json',
 } as const;
 
 export type DataFileKey = keyof typeof DATA_FILES;

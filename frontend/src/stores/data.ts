@@ -1,13 +1,15 @@
 /**
- * 数据仓库：manifest/dims/channel 首屏加载 + 维度文件按需懒加载 + 全部聚合查询函数。
+ * 数据仓库：manifest/dims 首屏加载 + 月分片按需加载重建内存桶 + 全部聚合查询函数。
  * 语义对齐原型 REAL 覆盖层（cell7/g6/aggDimRange/chDaily/gTotDate/collectTop/subRowsAt 等）：
  * - Meta 维度桶（camp/spu/ctry/age/ctype/sub/ad）不受账号筛选影响（直接遍历桶）
  * - 账号筛选仅作用于：Meta 大盘(m1)/账号(m2a) 与 Google 大盘(gm1)/账号(gm2)
  * - 大盘渠道页签（channel 桶）天然不含账号维度
  * - 站点过滤语义见 shared/metaDayToMetrics（多站=不过滤含 unknown；单站=过滤）
+ * v3 月分片：ensureForRange() 按选中区间∪环比区间加载缺失月份，深合并重建全部内存桶；
+ * 聚合函数仍是同步读内存桶（API 签名不变，视图零改动）。
  */
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   addMetrics,
   googleCellToMetrics,
@@ -25,9 +27,11 @@ import {
   type MetaCreativeData,
   type MetaDimData,
   type Metrics,
+  type MonthSlice,
 } from '@ads/shared';
 import { dateRange } from '@ads/shared';
-import { loadChannel, loadData, loadDims, loadManifest } from '@/data';
+import { loadDims, loadManifest, loadSlice } from '@/data';
+import { emptyBuckets, mergeSlices, neededMonths } from '@/data/merge';
 import { useFilterStore } from './filter';
 import { adCodeOf } from '@/specs/columns';
 
@@ -56,8 +60,11 @@ export const useDataStore = defineStore('data', () => {
   const manifest = ref<Manifest | null>(null);
   const dims = ref<Dims | null>(null);
   const loadError = ref('');
+  /** 当前筛选区间（∪环比）所需月分片已就绪；false 时 App 层显示加载遮罩 */
+  const rangeReady = ref(true);
 
-  // 契约文件内存形态（非响应式：查询函数同步读，视图经 computed 消费结果）
+  // 已加载月分片（month → slice）与契约文件内存形态（非响应式：查询函数同步读）
+  const slices = new Map<string, MonthSlice>();
   let channel: ChannelData | null = null;
   let metaAccB: Record<string, MetaBucket> | null = null;
   let metaCampB: Record<string, MetaBucket> | null = null;
@@ -86,36 +93,79 @@ export const useDataStore = defineStore('data', () => {
     return v;
   }
 
-  /** 首屏：manifest（契约校验）+ dims + channel，并初始化筛选默认区间 */
+  /** 首屏：manifest（契约校验）+ dims + 默认区间月分片，并初始化筛选默认区间 */
   async function init(): Promise<void> {
     if (manifest.value) return;
     const m = await loadManifest();
     const d = await loadDims();
-    channel = await loadChannel();
     manifest.value = m;
     dims.value = d;
     const accounts = metaAccounts.value;
     const gAcc = gAccounts.value;
     filter.setAccountUniverse(accounts, gAcc);
     filter.initDefaults(m.range.viewStart, m.range.viewEnd, accounts, gAcc);
+    await ensureForRange();
+    // 区间/环比变更 → 增量补载缺失月分片；加载期间 rangeReady=false，App 层遮罩
+    watch(
+      () => filter.applied.version,
+      () => {
+        void ensureForRange().catch((e) => {
+          console.error('[data] 月分片加载失败', e);
+          loadError.value = e instanceof Error ? e.message : String(e);
+          rangeReady.value = true;
+        });
+      },
+    );
   }
 
-  /** 按需加载维度文件（进入对应 tab 时调用一次） */
-  async function ensure(...files: string[]): Promise<void> {
-    const getters: Record<string, () => Promise<unknown>> = {
-      metaAcc: async () => (metaAccB = await loadData<Record<string, MetaBucket>>('metaAcc')),
-      metaCamp: async () => (metaCampB = await loadData<Record<string, MetaBucket>>('metaCamp')),
-      metaSpu: async () => (metaSpuB = await loadData<Record<string, MetaBucket>>('metaSpu')),
-      metaDim: async () => (metaDimB = await loadData<MetaDimData>('metaDim')),
-      metaCreative: async () => (creativeB = await loadData<MetaCreativeData>('metaCreative')),
-      metaAd: async () => (metaAdB = await loadData<Record<string, MetaBucket>>('metaAd')),
-      googleAcc: async () => (gAccB = await loadData<Record<string, GoogleBucket>>('googleAcc')),
-      googleDim: async () => (gDimB = await loadData<GoogleDimData>('googleDim')),
-      googleSpu: async () => (gSpuB = await loadData<Record<string, GoogleBucket>>('googleSpu')),
-      googleType: async () => (gTypeB = await loadData<GoogleTypeData>('googleType')),
-      googleCmp: async () => (gCmpB = await loadData<GoogleCmpData>('googleCmp')),
-    };
-    await Promise.all(files.map((f) => getters[f]?.() ?? Promise.reject(new Error(`未知数据文件：${f}`))));
+  /** 选中区间 ∪ 环比区间 → 应加载月列表（manifest.months 交集） */
+  function needMonths(): string[] {
+    const a = filter.applied;
+    const ranges = [{ start: a.start, end: a.end }, ...filter.cmpRanges];
+    return neededMonths(ranges, manifest.value?.months ?? []);
+  }
+
+  /** 补载缺失月分片并重建全部内存桶（增量：已有分片不重复拉取） */
+  async function ensureForRange(): Promise<void> {
+    const missing = needMonths().filter((m) => !slices.has(m));
+    if (!missing.length) {
+      rangeReady.value = true;
+      return;
+    }
+    rangeReady.value = false;
+    try {
+      const loaded = await Promise.all(missing.map(async (m) => [m, await loadSlice(m)] as const));
+      for (const [m, sl] of loaded) slices.set(m, sl);
+      rebuildBuckets();
+      rangeReady.value = true;
+    } catch (e) {
+      rangeReady.value = true;
+      throw e;
+    }
+  }
+
+  /** 重建式合并：全部内存桶按已加载分片（月升序）深合并重建，语义与 v2 单快照同构 */
+  function rebuildBuckets(): void {
+    const b = emptyBuckets();
+    mergeSlices(b, [...slices.entries()].sort(([x], [y]) => (x < y ? -1 : 1)).map(([, sl]) => sl));
+    channel = b.channel;
+    metaAccB = b.metaAcc as unknown as Record<string, MetaBucket>;
+    metaCampB = b.metaCamp as unknown as Record<string, MetaBucket>;
+    metaSpuB = b.metaSpu as unknown as Record<string, MetaBucket>;
+    metaDimB = b.metaDim as unknown as MetaDimData;
+    creativeB = b.metaCreative as unknown as MetaCreativeData;
+    metaAdB = b.metaAd as unknown as Record<string, MetaBucket>;
+    gAccB = b.googleAcc as unknown as Record<string, GoogleBucket>;
+    gDimB = b.googleDim as unknown as GoogleDimData;
+    gSpuB = b.googleSpu as unknown as Record<string, GoogleBucket>;
+    gTypeB = b.googleType as unknown as GoogleTypeData;
+    gCmpB = b.googleCmp as unknown as GoogleCmpData;
+  }
+
+  /** 兼容入口（视图 tab 切换调用；分片模式下全部结构已随区间就绪） */
+  async function ensure(..._files: string[]): Promise<void> {
+    void _files;
+    if (!rangeReady.value) await ensureForRange();
   }
 
   /* ================= 派生枚举（对齐原型 REAL 枚举替换） ================= */
@@ -543,8 +593,10 @@ export const useDataStore = defineStore('data', () => {
     manifest,
     dims,
     loadError,
+    rangeReady,
     init,
     ensure,
+    ensureForRange,
     metaAccounts,
     gAccounts,
     metaCampaigns,

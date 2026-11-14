@@ -16,10 +16,11 @@ import { resolve } from 'node:path';
 import { createDbSource } from './sources/db';
 import { createReorcClient } from './sources/reorc/client';
 import { discoverReorcTarget, extractDatabaseNames } from './sources/reorc/discover';
-import { createReorcSource, REORC_BASE_URL_DEFAULT } from './sources/reorc';
+import { beijingYesterday, createReorcSource, REORC_BASE_URL_DEFAULT } from './sources/reorc';
+import { fetchMonthly } from './sources/reorc/monthly';
 import { createRdFileSource } from './sources/rdfile';
 import type { Source, SourceKind } from './sources/types';
-import { emitDataset } from './build/emit';
+import { emitDataset, emitMonthly } from './build/emit';
 import { validateDataset } from './validate';
 
 interface Args {
@@ -28,6 +29,8 @@ interface Args {
   out: string;
   dry: boolean;
   probe?: boolean;
+  /** v3 月度分片模式（--monthly / PIPELINE_MODE=monthly）：REORC_START~REORC_END 按自然月拉取 */
+  monthly?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -36,6 +39,7 @@ function parseArgs(argv: string[]): Args {
     source: (process.env.PIPELINE_SOURCE as SourceKind) || 'rdfile',
     out: resolve(import.meta.dirname, '../../frontend/public/data'),
     dry: false,
+    monthly: process.env.PIPELINE_MODE === 'monthly',
   };
   for (const a of argv) {
     if (a.startsWith('--source=')) args.source = a.slice('--source='.length) as SourceKind;
@@ -43,10 +47,13 @@ function parseArgs(argv: string[]): Args {
     else if (a.startsWith('--out=')) args.out = a.slice('--out='.length);
     else if (a === '--dry') args.dry = true;
     else if (a === '--probe') args.probe = true;
+    else if (a === '--monthly') args.monthly = true;
     else throw new Error(`未知参数：${a}`);
   }
+  // 月度/探查模式不看拉数通道（source 默认 rdfile 无 input 属正常）
+  if (args.monthly || args.probe) return args;
   if (args.source === 'rdfile' && !args.input) {
-    throw new Error('rdfile 通道需要 --in=<ads_real.js 路径>');
+    throw new Error(`rdfile 通道需要 --in=<ads_real.js 路径>`);
   }
   if (args.source !== 'rdfile' && args.input) {
     throw new Error('--in 仅用于 rdfile 通道');
@@ -189,7 +196,46 @@ async function main() {
     return;
   }
   const args = parseArgs(process.argv.slice(2));
-  console.log(`[pipeline] 通道=${args.source}${args.input ? ` in=${args.input}` : ''} out=${args.out}${args.dry ? ' (dry)' : ''}`);
+  console.log(
+    `[pipeline] 通道=${args.source}${args.input ? ` in=${args.input}` : ''} out=${args.out}${args.dry ? ' (dry)' : ''}${args.monthly ? ' (monthly)' : ''}`,
+  );
+
+  // v3 月度分片模式：REORC_START（默认 2026-01-01）~REORC_END（默认北京昨日）按自然月拉取
+  if (args.monthly) {
+    const baseUrl = process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
+    const token = process.env.REORC_TOKEN;
+    if (!token) {
+      throw new Error('缺少 REORC_TOKEN。请设置环境变量；token 获取：本地终端 reorc-cli login，或 DevTools 复制 authorization 头。');
+    }
+    const client = createReorcClient({ baseUrl, token });
+    const target = await discoverReorcTarget(client, (m) => console.log(`[pipeline] ${m}`));
+    console.log(`[pipeline] 目标：env=${target.envName} conn=${target.connectionName} db=${target.database}`);
+    const start = process.env.REORC_START || '2026-01-01';
+    const end = process.env.REORC_END || beijingYesterday();
+    console.log(`[pipeline] 月度回填：${start} ~ ${end}`);
+
+    const payload = await fetchMonthly({
+      client,
+      connectionId: target.connectionId,
+      database: target.database,
+      envId: target.envId,
+      start,
+      end,
+    });
+    console.log(
+      `[pipeline] 拉取完成：genAt=${payload.manifest.genAt} range=${payload.manifest.range.min}~${payload.manifest.range.max} 分片=${payload.slices.length}`,
+    );
+
+    if (args.dry) {
+      console.log('[pipeline] --dry：跳过写盘');
+      return;
+    }
+    const result = emitMonthly(payload, args.out);
+    const totalKB = (result.files.reduce((s, f) => s + f.bytes, 0) / 1024).toFixed(1);
+    console.log(`[pipeline] 写盘完成：${result.files.length} 个文件，共 ${totalKB} KB → ${result.outDir}`);
+    for (const f of result.files) console.log(`  - ${f.path} (${(f.bytes / 1024).toFixed(1)} KB)`);
+    return;
+  }
 
   const source = createSource(args.source, args.input);
   const ds = await source.fetch();

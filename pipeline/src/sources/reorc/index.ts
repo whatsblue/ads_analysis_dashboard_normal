@@ -20,7 +20,7 @@ export const REORC_SCOPE =
   'Meta×(shopify+shoplazza) + Google×shopify；TikTok/Snapchat、Google×shoplazza 未接入；口径=unified';
 
 /** 数据口径为北京时间 T+1；北京 = UTC+8（无夏令时），不依赖 runner 本地时区 */
-function beijingYesterday(): string {
+export function beijingYesterday(): string {
   const beijingToday = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
   return addDays(beijingToday, -1);
 }

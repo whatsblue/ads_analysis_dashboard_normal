@@ -26,6 +26,8 @@ export const ManifestSchema = z.object({
     viewEnd: DateStrSchema,
   }),
   scope: z.string(),
+  /** v3：月度分片月列表（YYYY-MM） */
+  months: z.array(z.string().regex(/^\d{4}-\d{2}$/)),
 });
 
 const StrArray = z.array(z.string());
@@ -72,4 +74,21 @@ export const GoogleDimSchema = z.object({ ctry: GoogleCtyDimBucketSchema, age: G
 export const GoogleTypeSchema = z.object({
   typeBrand: GoogleDimBucketSchema,
   cmpNames: z.record(z.string()),
+});
+
+/** v3 月度分片：单自然月全部日粒度结构（月标识冗余存文件内，加载校验用） */
+export const MonthSliceSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  channel: ChannelSchema,
+  metaAcc: MetaDimBucketSchema,
+  metaCamp: MetaDimBucketSchema,
+  metaSpu: MetaDimBucketSchema,
+  metaDim: MetaDimSchema,
+  metaCreative: MetaCreativeSchema,
+  metaAd: MetaDimBucketSchema,
+  googleAcc: GoogleDimBucketSchema,
+  googleDim: GoogleDimSchema,
+  googleSpu: GoogleDimBucketSchema,
+  googleType: GoogleTypeSchema,
+  googleCmp: GoogleDimBucketSchema,
 });

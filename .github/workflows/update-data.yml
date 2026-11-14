@@ -1,6 +1,8 @@
 name: Update Data
 
-# 数据自动更新：T+1 北京时间 05:00（UTC 21:00）拉取 → 校验 → 拆分 JSON → commit → 部署
+# 数据自动更新：T+1 北京时间 05:00（UTC 21:00）→ v3 月度分片全量重生成 → commit → 部署。
+# 全量（REORC_START 默认 2026-01-01 起）幂等重生成：历史月份迟到回传自然收敛，
+# 月分片 months/<YYYY-MM>.json 前端按需加载。
 # 依赖 Secrets：REORC_TOKEN（必需）/ REORC_BASE_URL（可选，默认 api.cn.reorc.cloud）
 # 见 docs/SECRETS.md
 on:
@@ -20,8 +22,12 @@ on:
         description: '定向探查使用的连接名（默认 selectdb）'
         type: string
         default: ''
-      window_days:
-        description: '拉取窗口天数（默认 10 天滚动；数据验证时可临时加大）'
+      start:
+        description: '月度回填起点（默认 2026-01-01；临时验证可改窄）'
+        type: string
+        default: ''
+      end:
+        description: '月度回填终点（默认北京昨日）'
         type: string
         default: ''
 
@@ -39,7 +45,7 @@ jobs:
   update:
     name: 拉数 + 校验 + 提交
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # pnpm 12 供应链新政：lockfile 已冻结版本，豁免发布年龄拦截保 CI 稳定
       npm_config_minimum_release_age: '0'
@@ -60,19 +66,20 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Run pipeline (reorc)
+      - name: Run pipeline (monthly slices)
         env:
           REORC_BASE_URL: ${{ secrets.REORC_BASE_URL }}
           REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
           # 取数目标：selectdb 连接的 data_warehouse_prod（广告聚合层），SQL 内仍带 schema 前缀双保险
           REORC_CONNECTION_NAME: selectdb
           REORC_DATABASE: data_warehouse_prod
-          # 通道用环境变量传递：pnpm 12 递归 run 场景下 "--" 传参会拆坏（实测孤立 "-"）
-          PIPELINE_SOURCE: reorc
+          # v3 月度分片：REORC_START~REORC_END 按自然月逐月拉取（空值时 cli 默认 2026-01-01~北京昨日）
+          PIPELINE_MODE: monthly
           PIPELINE_PROBE: ${{ inputs.probe }}
+          REORC_START: ${{ inputs.start }}
+          REORC_END: ${{ inputs.end }}
           REORC_PROBE_SQL: ${{ inputs.probe_sql }}
           REORC_PROBE_CONN: ${{ inputs.probe_conn }}
-          REORC_WINDOW_DAYS: ${{ inputs.window_days }}
         run: pnpm --filter pipeline start
 
       - name: Check data changes

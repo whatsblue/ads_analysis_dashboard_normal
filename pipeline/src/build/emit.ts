@@ -3,6 +3,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { MonthSlice } from '@ads/shared';
 import type { RawDataset } from '../sources/types';
 
 export interface EmitResult {
@@ -63,4 +64,52 @@ function cleanupTmp(dir: string) {
 
 export function removeDataDir(outDir: string): void {
   rmSync(outDir, { recursive: true, force: true });
+}
+
+/** v3：manifest + dims + months/<YYYY-MM>.json；先全局文件后 manifest（加载器以 manifest 为准） */
+export interface MonthlyEmitPayload {
+  manifest: RawDataset['manifest'];
+  dims: RawDataset['dims'];
+  slices: MonthSlice[];
+}
+
+export function emitMonthly(payload: MonthlyEmitPayload, outDir: string): EmitResult {
+  removeV2Files(outDir);
+  const files: { path: string; bytes: number }[] = [];
+  const write = (rel: string, data: unknown) => {
+    const target = join(outDir, rel);
+    mkdirSync(dirname(target), { recursive: true });
+    const tmp = target + '.tmp';
+    const buf = Buffer.from(JSON.stringify(data), 'utf8');
+    writeFileSync(tmp, buf);
+    renameSync(tmp, target);
+    files.push({ path: rel, bytes: buf.byteLength });
+  };
+  write('dims.json', payload.dims);
+  for (const s of payload.slices) write(`months/${s.month}.json`, s);
+  write('manifest.json', payload.manifest); // 最后写：前端以 manifest.v/months 为准
+  cleanupTmpMonths(outDir);
+  return { outDir, files };
+}
+
+/** v2 遗留文件清理（channel.json/meta/google 目录；前端 v3 不再请求） */
+function removeV2Files(outDir: string): void {
+  for (const rel of ['channel.json', 'meta', 'google']) {
+    rmSync(join(outDir, rel), { recursive: true, force: true });
+  }
+}
+
+function cleanupTmpMonths(outDir: string): void {
+  const d = join(outDir, 'months');
+  if (!existsSync(d)) return;
+  for (const f of readdirSync(d)) {
+    const p = join(d, f);
+    if (f.endsWith('.tmp') && statSync(p).isFile()) {
+      try {
+        unlinkSync(p);
+      } catch {
+        /* 忽略清理失败 */
+      }
+    }
+  }
 }

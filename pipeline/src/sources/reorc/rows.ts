@@ -3,7 +3,7 @@
  * 防御规则：数值 NULL→0；站点白名单外→unknown；日期非 YYYY-MM-DD 抛错。
  * A 键（全站合计）在站点行入桶时同步累加，对齐 RD 预计算语义。
  */
-import { CONTRACT_VERSION, addDays } from '@ads/shared';
+import { CONTRACT_VERSION, addDays, monthsCover } from '@ads/shared';
 import type {
   ChannelData,
   DateStr,
@@ -265,6 +265,7 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     manifest: {
       v: CONTRACT_VERSION,
       genAt: ctx.genAt,
+      months: monthsCover(min, max),
       range: { min, max, viewStart: addDays(max, -6), viewEnd: max },
       scope: ctx.scope,
     },

@@ -84,3 +84,17 @@ export function dateRange(start: string, end: string): string[] {
   }
   return out;
 }
+
+/** [min,max] 覆盖的自然月列表（YYYY-MM 升序；窗口切片与 manifest.months 共用） */
+export function monthsCover(min: string, max: string): string[] {
+  const out: string[] = [];
+  if (min > max) return out;
+  let cur = min.slice(0, 7);
+  for (let guard = 0; guard < 240; guard++) {
+    out.push(cur);
+    const nextM = addMonths(`${cur}-01`, 1).slice(0, 7);
+    if (nextM > max.slice(0, 7)) break;
+    cur = nextM;
+  }
+  return out;
+}

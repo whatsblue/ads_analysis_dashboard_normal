@@ -117,7 +117,10 @@ onMounted(async () => {
   </div>
 
   <main>
-    <RouterView v-if="inited" />
+    <RouterView v-if="inited && data.rangeReady" />
+    <div class="loading-mask" v-else-if="inited">
+      <span class="spin"></span>加载月分片数据中…
+    </div>
   </main>
 
   <AttrTip />
@@ -127,7 +130,7 @@ onMounted(async () => {
       <button class="x" type="button" @click="calOpen = false">✕</button>
       <h3>口径说明</h3>
       <ul>
-        <li><b>数据说明</b>：本看板覆盖 Meta、Google 广告数据；日业务数据通常在 T+1 05:00 前同步到看板，并滚动更新最近 10 个自然日。</li>
+        <li><b>数据说明</b>：本看板覆盖 2026-01-01 以来的 Meta、Google 广告数据；日业务数据通常在 T+1 05:00 前同步，并每日滚动重写最近 3 个自然月（历史月份的迟到回传随同步逐日收敛）。月度分片按需加载，切换日期区间时可能短暂提示加载。</li>
         <li><b>范围</b>：Meta×(Shopify+Shoplazza) + Google×Shopify；当前接入 {{ calRangeTxt }}</li>
         <li><b>筛选</b>：「大盘」联动日期范围和销售站点；账号筛选不影响该卡片。</li>
         <li><b>口径</b>：主看板 CVR = 订单数 / 统一交互数；Google 深度分析按字段名区分 google / shopify / 归因口径。</li>
