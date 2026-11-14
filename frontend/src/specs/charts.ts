@@ -143,7 +143,7 @@ export function gTrendOpt(bk: BucketData, barSeries: any[], objs?: ObjLinesSpec)
   };
 }
 
-/** 横向条形图（大值在顶；原型各 ROAS 对比图）；colors 非空时逐条着色 */
+/** 横向条形图（大值在顶；原型各 ROAS 对比图）；colors 非空时逐条着色；layout 覆盖大盘专属版式（原型 chartCad2） */
 export function hBarOption(
   labels: string[],
   values: number[],
@@ -151,17 +151,22 @@ export function hBarOption(
   axisName = 'ROAS',
   seriesName?: string,
   colors?: string[],
+  layout?: { grid?: { left: number; right: number; top: number; bottom: number }; barMaxWidth?: number; axisNameLocation?: 'middle'; axisNameGap?: number },
 ): Record<string, unknown> {
   return {
     tooltip: { trigger: 'axis' },
-    grid: { left: 96, right: 44, top: 10, bottom: 26 },
-    xAxis: { type: 'value', name: axisName },
+    grid: layout?.grid ?? { left: 96, right: 44, top: 10, bottom: 26 },
+    xAxis: {
+      type: 'value',
+      name: axisName,
+      ...(layout?.axisNameLocation ? { nameLocation: layout.axisNameLocation, nameGap: layout.axisNameGap } : {}),
+    },
     yAxis: { type: 'category', data: labels, inverse: true },
     series: [
       {
         name: seriesName,
         type: 'bar',
-        barMaxWidth: 20,
+        barMaxWidth: layout?.barMaxWidth ?? 20,
         itemStyle: { color, borderRadius: [0, 3, 3, 0] },
         data: colors ? values.map((v, i) => ({ value: v, itemStyle: { color: colors[i % colors.length], borderRadius: [0, 3, 3, 0] } })) : values,
         label: { show: true, position: 'right', fontSize: 11 },
@@ -194,16 +199,20 @@ export function dualHBarOption(
   };
 }
 
-/** 环形占比图（原型 pie 系列：花费/订单/转化价值切换；data 项可带 itemStyle 逐项着色） */
-export function donutOption(data: { name: string; value: number; itemStyle?: Record<string, unknown> }[]): Record<string, unknown> {
+/** 环形占比图（原型 pie 系列：花费/订单/转化价值切换；data 项可带 itemStyle 逐项着色）；大盘与 g1 花费分布用 42%/68%@50%,45%（原型 chartCad1/chartG1） */
+export function donutOption(
+  data: { name: string; value: number; itemStyle?: Record<string, unknown> }[],
+  radius: [string, string] = ['45%', '70%'],
+  center: [string, string] = ['50%', '46%'],
+): Record<string, unknown> {
   return {
     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
     legend: { bottom: 0 },
     series: [
       {
         type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '46%'],
+        radius,
+        center,
         itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
         label: { formatter: '{b}\n{d}%' },
         data,

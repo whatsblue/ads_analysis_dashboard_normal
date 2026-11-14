@@ -6,11 +6,16 @@
 import { computed, ref, watch } from 'vue';
 import { d2s } from '@ads/shared';
 
-const props = defineProps<{
-  /** 外部当前生效区间（打开面板时同步） */
-  start: string;
-  end: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    /** 外部当前生效区间（打开面板时同步） */
+    start: string;
+    end: string;
+    /** 底部提示文案（全局日期面板=点筛选栏【应用】；环比周期行=点【保 存】） */
+    footerTip?: string;
+  }>(),
+  { footerTip: '选择起止日期后自动收起，点筛选栏【应用】生效' },
+);
 
 const emit = defineEmits<{ picked: [s: string, e: string] }>();
 
@@ -145,7 +150,7 @@ function pick(ds: string): void {
     </div>
     <div class="cal-f">
       <span>{{ selStart || '…' }} ~ {{ selEnd || '…' }}</span>
-      <span class="cal-f-tip">选择起止日期后自动收起，点筛选栏【应用】生效</span>
+      <span class="cal-f-tip">{{ props.footerTip }}</span>
     </div>
   </div>
 </template>

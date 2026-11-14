@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
         <div class="at-h">{{ d.name }}</div>
         <div v-if="!d.items.length" class="at-empty">无有效环比对象（上期基数为 0 不参与）</div>
         <div v-for="it in d.items" :key="d.name + it.n" class="at-r">
-          <b v-if="ATTR_JUMP[ch]?.[d.name]" class="at-lk" :title="'点击查看 ' + it.n" @click="jump(d.name)">{{ it.n }}</b>
+          <b v-if="ATTR_JUMP[ch]?.[d.name]" class="at-lk" title="点击查看对应看板" @click="jump(d.name)">{{ it.n }}</b>
           <b v-else :title="it.n">{{ it.n }}</b>
           <span class="delta" :class="dvTxt(it.vn, it.vp).up ? 'd' : 'u'">{{ dvTxt(it.vn, it.vp).txt }}</span>
         </div>

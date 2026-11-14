@@ -30,15 +30,13 @@ const fmt = ref<'xls' | 'csv'>('xls');
 const dragIx = ref(-1);
 const overIx = ref(-1);
 
+/* 打开时仅重置列勾选；粒度/环比/格式为静态 DOM 跨打开保留（原型 radio/checkbox 不随弹窗重置） */
 watch(
   () => props.open,
   (o) => {
     if (o) {
       order.value = props.cols.slice();
       sel.value = props.cols.slice();
-      gran.value = 'range';
-      showCmp.value = true;
-      fmt.value = 'xls';
     }
   },
 );
@@ -80,7 +78,7 @@ function ok(): void {
           <span class="exp-opts">
             粒度：
             <label><input type="radio" value="range" v-model="gran" />按日期范围</label>
-            <label v-if="props.hasDay"><input type="radio" value="day" v-model="gran" />按日</label>
+            <label><input type="radio" value="day" v-model="gran" />按日</label>
             ｜
             <label><input type="checkbox" v-model="showCmp" />显示环比</label>
             ｜

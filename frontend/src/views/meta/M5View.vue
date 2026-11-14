@@ -160,7 +160,7 @@ const ctyRows = computed<TableRow[]>(() => {
     <div class="card">
       <div class="card-h">
         <span>{{ metDef.name }}趋势对比</span>
-        <span class="frow" style="align-items: center; font-weight: 400">
+        <span style="display: flex; gap: 6px; align-items: center; font-weight: 400">
           <span class="seg mini">
             <button v-for="g in (['day', 'month', 'year'] as const)" :key="g" :class="{ on: gran === g }" @click="gran = g">
               {{ g === 'day' ? '按日' : g === 'month' ? '按月' : '按年' }}

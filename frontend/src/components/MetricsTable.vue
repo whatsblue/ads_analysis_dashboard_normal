@@ -7,7 +7,7 @@
  * - 总计行（Σ求和 + 比率重算）；展开行组（素材编号 expOf）；首列下钻链接（linkFirst）
  * - 环比格 hover 归因（attrOn，浮层由 App 级 AttrTip 渲染）；导出（ExportModal）
  */
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useSlots, watch } from 'vue';
 import { cmpHL, dateRange, derive, deriveG, HL_CMP, HL_TH, sumMetrics, type Metrics } from '@ads/shared';
 import { deltaPct } from '@ads/shared';
 import { G_COLS, G_GROUP_DEF, METRIC_GROUPS, PCT_COLS, PCT_DEF, STD_COLS, TH_TIP, type ColDef, type GroupMap } from '@/specs/columns';
@@ -15,13 +15,15 @@ import type { CmpCell, TableRow } from '@/composables/useRows';
 import { useFilterStore } from '@/stores/filter';
 import { csvCell, downloadCsv, downloadXls, plainPct, safeFname } from '@/utils/export';
 import { hideAttrLater, showAttr } from '@/composables/useAttrTip';
+import '@/composables/useThTip';
 import ExportModal, { type ExportCfg } from './ExportModal.vue';
 
-/** 前置列单元格（素材编号列可展开：expandable=渲染箭头，expKey=展开态键） */
+/** 前置列单元格（素材编号列可展开：expandable=渲染箭头，expKey=展开态键，expCount=成员条数） */
 export interface PreCell {
   text: string;
   expandable?: boolean;
   expKey?: string;
+  expCount?: number;
   tip?: string;
 }
 export interface PreCol {
@@ -34,8 +36,14 @@ const props = withDefaults(
   defineProps<{
     /** 表 id（PCT_DEF 默认占比 / hover 归因键） */
     tid: string;
-    /** 卡片标题（导出文件名） */
+    /** 卡片标题（卡头文字；导出名另见 exportName） */
     title: string;
+    /** 导出文件名/导出弹窗标题（原型 regTable title 与卡头文字分离：如 g2 卡头「国家对比明细」导出「Google × 国家」）；缺省=卡头文字 */
+    exportName?: string;
+    /** 无 .card 外壳（素材子分类单卡双表：嵌在外层卡片内，仅渲染卡头+表体） */
+    noCard?: boolean;
+    /** 卡头内联样式（noCard 双表场景：表1 padding-top:4px / 表2 border-top 分隔） */
+    headStyle?: string;
     firstCol: string;
     rows: TableRow[];
     mode?: 'std' | 'g';
@@ -63,6 +71,9 @@ const props = withDefaults(
   }>(),
   {
     mode: 'std',
+    exportName: '',
+    noCard: false,
+    headStyle: '',
     dateInline: false,
     linkFirst: false,
     firstTip: '',
@@ -83,6 +94,8 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ link: [label: string] }>();
+
+const slots = useSlots();
 
 /** 占比开关跨页保留（原型 tables[id].pctOn 全局持久：页签切换/筛选重渲染不丢勾选，路由重建也不重置） */
 const PCT_STATE = new Map<string, boolean>();
@@ -355,8 +368,8 @@ function doExport(cfg: ExportCfg): void {
     }
   }
 
-  // 总计行（全量口径；占比=100%）
-  if (!props.noTotal && !props.dateInline) {
+  // 总计行（全量口径，含 dateInline 表；占比=100%）
+  if (!props.noTotal) {
     const tAll = props.totalRows?.length ? props.totalRows : rowsD.value.map((o) => o.r);
     if (tAll.length) {
       const tm = sumMetrics(tAll.map((r) => r.m));
@@ -372,7 +385,7 @@ function doExport(cfg: ExportCfg): void {
     }
   }
 
-  const fname = safeFname(props.title);
+  const fname = safeFname(props.exportName || props.title);
   if (cfg.fmt === 'csv') downloadCsv(arr, fname);
   else downloadXls(arr, fname);
   expOpen.value = false;
@@ -384,15 +397,21 @@ const cmpOn = computed(() => filter.applied.cmpOn);
 </script>
 
 <template>
-  <div class="card">
-    <div class="card-h">
-      <span>{{ props.title }}</span>
+  <!-- noCard：素材子分类单卡双表场景，嵌在外层 .card 内仅去掉卡片外壳（原型 m4sub 结构） -->
+  <div :class="props.noCard ? undefined : 'card'">
+    <div class="card-h" :style="props.headStyle || undefined">
+      <!-- head-pre：卡头最左（下钻返回按钮）；head-note：紧贴标题的说明（原型 m4a 注释） -->
+      <slot name="head-pre"></slot>
+      <!-- 原型 m4c：卡头标题跟在返回按钮后，margin-left:10px（叠加 .card-h gap:10px） -->
+      <span :style="slots['head-pre'] ? { marginLeft: '10px' } : undefined">{{ props.title }}</span>
+      <slot name="head-note"></slot>
+      <span class="card-h-extra"><slot name="head-extra"></slot></span>
       <label v-if="!props.noPct" class="pct-tgl" title="勾选后展示花费占比、订单占比、转化价值占比（分母=本表总计，总计=100%）">
         <input type="checkbox" v-model="pctOn" />显示占比
       </label>
-      <span class="card-h-extra"><slot name="head-extra"></slot></span>
       <button class="btn xs exp-btn" @click="expOpen = true">⇩ 导出</button>
     </div>
+    <slot name="below-head"></slot>
     <div class="card-b tbl-scroll" :class="{ tall: limit > 10 }">
       <table class="matrix">
         <thead>
@@ -413,7 +432,7 @@ const cmpOn = computed(() => filter.applied.cmpOn);
               :key="c.k"
               class="sortable"
               :class="{ 'sorted-desc': sortCol === c.k && sortDir === 'desc', 'sorted-asc': sortCol === c.k && sortDir === 'asc' }"
-              :title="TIP[c.k] || undefined"
+              :data-tip="TIP[c.k] || undefined"
               @click="toggleSort(c.k)"
             >
               {{ c.name }}
@@ -437,7 +456,7 @@ const cmpOn = computed(() => filter.applied.cmpOn);
               </td>
               <td v-for="(p, pi) in props.pre" :key="p.name" :style="p.w ? { maxWidth: p.w, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined">
                 <template v-if="pi === 0 && typeof p.get(o.r as never) !== 'string'">
-                  <span v-if="(p.get(o.r as never) as PreCell).expandable" class="exp-tgl" :title="`点击${expanded[(p.get(o.r as never) as PreCell).expKey!] ? '收起' : '展开'}该编号下细分指标`" @click="toggleExpand((p.get(o.r as never) as PreCell).expKey!)">
+                  <span v-if="(p.get(o.r as never) as PreCell).expandable" class="exp-tgl" :title="`点击${expanded[(p.get(o.r as never) as PreCell).expKey!] ? '收起' : '展开'}该编号下${(p.get(o.r as never) as PreCell).expCount ? ' ' + (p.get(o.r as never) as PreCell).expCount + ' 条广告' : ''}的细分指标`" @click="toggleExpand((p.get(o.r as never) as PreCell).expKey!)">
                     {{ expanded[(p.get(o.r as never) as PreCell).expKey!] ? '▾' : '▸' }} {{ (p.get(o.r as never) as PreCell).text }}
                   </span>
                   <span v-else :title="(p.get(o.r as never) as PreCell).tip">{{ (p.get(o.r as never) as PreCell).text }}</span>
@@ -504,5 +523,5 @@ const cmpOn = computed(() => filter.applied.cmpOn);
       </table>
     </div>
   </div>
-  <ExportModal :open="expOpen" :title="props.title" :cols="expCols" :hasDay="!!props.dayFn" @close="expOpen = false" @download="doExport" />
+  <ExportModal :open="expOpen" :title="props.exportName || props.title" :cols="expCols" :hasDay="!!props.dayFn" @close="expOpen = false" @download="doExport" />
 </template>

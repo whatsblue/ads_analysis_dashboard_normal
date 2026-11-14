@@ -67,6 +67,7 @@ const campRows = computed<TableRow[]>(() => {
     <MetricsTable tid="gmc" title="Campaign 明细" first-col="Campaign" :rows="campRows" mode="g" :cols="G_CMP_COLS" no-pct>
       <template #head-extra>
         <MultiDropdown
+          label="广告系列"
           all-name="广告系列"
           :items="data.gCampaigns"
           :selected="cmpSel"

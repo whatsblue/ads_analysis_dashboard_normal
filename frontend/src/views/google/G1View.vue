@@ -67,7 +67,12 @@ const brandRows = computed<TableRow[]>(() => {
 
 const pieOpt = computed(() => {
   void filter.applied.version;
-  return donutOption(typeKeys.value.map((ty) => ({ name: gTypeName(ty), value: +typeAgg.value[ty].spend.toFixed(2) })));
+  /* 大盘同款版式（原型 chartG1：radius 42%/68% center 50%,45%） */
+  return donutOption(
+    typeKeys.value.map((ty) => ({ name: gTypeName(ty), value: +typeAgg.value[ty].spend.toFixed(2) })),
+    ['42%', '68%'],
+    ['50%', '45%'],
+  );
 });
 
 const roasOpt = computed(() => {
@@ -103,6 +108,7 @@ const roasOpt = computed(() => {
     <MetricsTable
       tid="g1b"
       title="广告类型明细 · 是否品牌词"
+      export-name="是否品牌词明细"
       first-col="是否品牌词"
       :rows="brandRows"
       mode="g"

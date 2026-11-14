@@ -12,6 +12,8 @@ const props = withDefaults(
     excl: boolean;
     /** 全称后缀（如「站点」→ 全部站点） */
     allName?: string;
+    /** 按钮上方小标签（.fd dd 纵向结构，原型 m2b/gmc「广告系列」、下钻「广告名称」） */
+    label?: string;
     /** 未选态按钮文案（动态，如国家 Top5） */
     emptyText?: () => string;
     clearable?: boolean;
@@ -19,7 +21,7 @@ const props = withDefaults(
     /** 面板最小宽（跟随按钮场景） */
     panelMinWidth?: number;
   }>(),
-  { allName: '', clearable: false, panelMinWidth: 300 },
+  { allName: '', label: '', clearable: false, panelMinWidth: 300 },
 );
 
 const emit = defineEmits<{ change: [sel: string[], excl: boolean] }>();
@@ -133,7 +135,8 @@ const pasteCustom = ref('');
 </script>
 
 <template>
-  <span class="dd" :class="{ open }">
+  <span class="dd" :class="{ open, fd: !!props.label }">
+    <b v-if="props.label">{{ props.label }}</b>
     <button type="button" :class="{ 'has-sel': props.clearable && props.selected.length }" @click.stop="open = !open">
       <span class="dd-lbl">{{ btnText }}</span>
       <i v-if="props.clearable && props.selected.length" class="dd-x" title="清除筛选" @click.stop="clear">×</i>

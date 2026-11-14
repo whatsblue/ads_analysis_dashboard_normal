@@ -168,7 +168,7 @@ const topPre = computed<PreCol[]>(() => [
       const g = r as unknown as TopRow;
       if (!g.code) return '—';
       if (g.items.length < 2) return { text: g.code, tip: '单条广告，无可展开明细' };
-      return { text: g.code, expandable: true, expKey: g.key };
+      return { text: g.code, expandable: true, expKey: g.key, expCount: g.items.length };
     },
   },
   {
@@ -229,8 +229,8 @@ function topDayFn(r: TableRow, d: string): Metrics {
         :day-fn="(r, d) => data.metaDimDate('ctype', d)[String(r.code)] || zero()"
         @link="enterDrill"
       >
-        <template #head-extra>
-          <span class="note" style="margin: 0">点击「素材类型」名称下钻查看该类型 Top 素材</span>
+        <template #head-note>
+          <span style="font-weight: 400; color: var(--sub); font-size: 11px; margin-left: 8px">点击「素材类型」名称下钻查看该类型 Top 素材</span>
         </template>
       </MetricsTable>
 
@@ -241,11 +241,12 @@ function topDayFn(r: TableRow, d: string): Metrics {
             <button v-for="d in SUB_DEFS" :key="d.key" :class="{ on: subTab === d.key }" @click="subTab = d.key">{{ d.name }}</button>
           </span>
         </div>
-        <div class="note" style="padding: 0 16px; margin-top: 10px">子 tab 切换后下方两张表同步更新（分类表 + 新旧/付费分类表）</div>
       </div>
       <MetricsTable
         tid="m4sub"
         :title="subDef.t1"
+        no-card
+        head-style="padding-top: 4px"
         first-col="子分类"
         :rows="sub1Rows"
         :sort-col="null"
@@ -254,6 +255,8 @@ function topDayFn(r: TableRow, d: string): Metrics {
       <MetricsTable
         tid="m4sub2"
         :title="subDef.alt.title"
+        no-card
+        head-style="border-top: 1px solid var(--line)"
         first-col="子分类"
         :rows="sub2Rows"
         :sort-col="null"
@@ -266,6 +269,7 @@ function topDayFn(r: TableRow, d: string): Metrics {
       <MetricsTable
         tid="m4c"
         :title="drillTitle"
+        export-name="Top 素材分析"
         first-col="素材类型"
         :rows="topRows"
         no-pct
@@ -274,9 +278,13 @@ function topDayFn(r: TableRow, d: string): Metrics {
         :exp-of="topExpOf"
         :day-fn="topDayFn"
       >
-        <template #head-extra>
+        <template #head-pre>
           <button class="btn xs" @click="exitDrill">← 返回素材类型明细</button>
-          <MultiDropdown all-name="广告" :items="adNames" :selected="adSel" :excl="adExcl" clearable @change="(sel, ex) => { adSel = sel; adExcl = ex; }" />
+        </template>
+        <template #below-head>
+          <div class="frow" style="padding: 10px 16px 0">
+            <MultiDropdown label="广告名称" all-name="广告" :items="adNames" :selected="adSel" :excl="adExcl" clearable @change="(sel, ex) => { adSel = sel; adExcl = ex; }" />
+          </div>
         </template>
       </MetricsTable>
     </template>

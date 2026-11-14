@@ -974,7 +974,6 @@ tr.exp-row td {
   user-select: none;
   margin-left: auto;
   margin-right: 10px;
-  font-weight: 400;
 }
 .pct-tgl input {
   accent-color: #2563eb;
@@ -1151,6 +1150,25 @@ tr.exp-row td {
   font-size: 11.5px;
 }
 
+/* 表头指标说明：body 级 .th-tip 浮层（fixed 定位，不被表格容器 overflow 裁剪；
+   z-index 59：低于筛选栏(60)避免滑动透字，高于表格 sticky 首列(5-9)） */
+.th-tip {
+  position: fixed;
+  z-index: 59;
+  background: #2b3a55;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 400;
+  padding: 7px 10px;
+  border-radius: 6px;
+  white-space: normal;
+  width: 230px;
+  text-align: left;
+  box-shadow: 0 4px 14px rgba(20, 30, 50, 0.22);
+  pointer-events: none;
+}
+
 /* ---------- 页签标题与横幅（原型 .ptitle/.banner） ---------- */
 .ptitle {
   display: flex;
@@ -1159,11 +1177,6 @@ tr.exp-row td {
   border-left: 4px solid var(--pri);
   padding: 2px 0 2px 12px;
   margin: 4px 0 14px;
-  flex-wrap: wrap;
-}
-.ptitle h2 {
-  margin: 0;
-  font-size: 16.5px;
 }
 .ptitle .desc {
   font-size: 12px;
@@ -1204,9 +1217,3 @@ tr.exp-row td {
 }
 
 /* ---------- 杂项 ---------- */
-.note {
-  font-size: 11.5px;
-  color: var(--sub);
-  margin-top: 8px;
-  line-height: 1.7;
-}

@@ -96,12 +96,15 @@ const ovTOpt = computed(() => {
 
 const spendOpt = computed(() => {
   void filter.applied.version;
+  /* 大盘专属版式（原型 chartCad1：radius 42%/68% center 50%,45%） */
   return donutOption(
     (['Meta', 'Google'] as const).map((ch) => ({
       name: ch,
       value: +data.chRange(ch, filter.applied.start, filter.applied.end).spend.toFixed(2),
       itemStyle: { color: CH_COLOR[ch] },
     })),
+    ['42%', '68%'],
+    ['50%', '45%'],
   );
 });
 
@@ -110,6 +113,7 @@ const roasOpt = computed(() => {
   const prs = (['Meta', 'Google'] as const)
     .map((ch) => ({ ch, v: +(derive(data.chRange(ch, filter.applied.start, filter.applied.end))!.roas || 0).toFixed(2) }))
     .sort((a, b) => b.v - a.v);
+  /* 大盘专属版式（原型 chartCad2：grid 64/56/12/30、barMaxWidth 22、轴名居中） */
   return hBarOption(
     prs.map((p) => p.ch),
     prs.map((p) => p.v),
@@ -117,6 +121,7 @@ const roasOpt = computed(() => {
     'ROAS',
     undefined,
     prs.map((p) => CH_COLOR[p.ch]),
+    { grid: { left: 64, right: 56, top: 12, bottom: 30 }, barMaxWidth: 22, axisNameLocation: 'middle', axisNameGap: 20 },
   );
 });
 
@@ -230,6 +235,7 @@ function ovExport(): void {
     <MetricsTable
       tid="ca"
       title="渠道对比明细"
+      export-name="渠道对比"
       first-col="渠道"
       :rows="caRows"
       :day-fn="(r, d) => chM(String(r.ch), d, d)"

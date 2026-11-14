@@ -99,7 +99,7 @@ function save(): void {
             <span class="dd pr-dd" :class="{ open: openIx === i }">
               <button type="button" style="min-width: 210px" @click.stop="openIx = openIx === i ? -1 : i">{{ r.start }} ~ {{ r.end }}</button>
               <div v-if="openIx === i" class="dd-panel" @click.stop>
-                <CalendarPicker :start="r.start" :end="r.end" @picked="(s, e) => onPicked(i, s, e)" />
+                <CalendarPicker :start="r.start" :end="r.end" footer-tip="选择起止日期后自动收起，点【保 存】生效" @picked="(s, e) => onPicked(i, s, e)" />
               </div>
             </span>
           </div>

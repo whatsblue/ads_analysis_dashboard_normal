@@ -188,8 +188,8 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick));
             <div class="acc-tip">
               {{
                 accNavs.length > 1
-                  ? 'Meta 与 Google 账号分别作用于各自页签：点击左侧渠道名仅切换账号列表'
-                  : '当前页签仅筛选 ' + (accCur === 'meta' ? 'Meta' : 'Google') + ' 账号'
+                  ? 'Meta 与 Google 账号分别作用于各自页签：点击左侧渠道名仅切换账号列表（进入面板默认全部未选）'
+                  : '当前页签仅筛选 ' + (accCur === 'meta' ? 'Meta' : 'Google') + ' 账号（进入面板默认全部未选）'
               }}
             </div>
             <div class="dd-tools">

@@ -66,7 +66,8 @@ const ctyRows = computed<TableRow[]>(() => {
 
     <MetricsTable
       tid="g2"
-      title="Google × 国家"
+      title="国家对比明细"
+      export-name="Google × 国家"
       first-col="国家"
       :rows="ctyRows"
       mode="g"
