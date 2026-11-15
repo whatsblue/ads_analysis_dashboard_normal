@@ -3,7 +3,7 @@
  * 铁律：任何视图/图表/导出禁止内联比率公式，一律引用本文件。
  */
 
-import type { GoogleCell, GoogleCtyCell, MetaCell, MetaDay, SiteKey } from './contract';
+import type { GoogleCell, GoogleCtyCell, MetaBucket, MetaCell, MetaDay, SiteKey } from './contract';
 
 /** 基础指标桶（聚合中间态；原型 zero()） */
 export interface Metrics {
@@ -130,6 +130,25 @@ export function metaDayToMetrics(day: MetaDay | undefined, sites: string[]): Met
   m.ckt = sum[6];
   if (len > 7) m.inter = sum[7]; // Meta SPU 8 元桶：全部点击（CVR 分母口径）
   return m;
+}
+
+/**
+ * 账号→站点映射（数仓 account×sales_platform 投放关系；从已加载 metaAcc 桶的日桶站点键推导）。
+ * 'A'=全站合计键跳过；站点键小写（shopify/shoplazza/unknown）。
+ * @param dates 可选日期白名单（所选区间）；传入时仅统计区间内的日桶（区间无投放的账号不入映射）
+ */
+export function accSitesOfBuckets(buckets: Record<string, MetaBucket>, dates?: ReadonlySet<string>): Record<string, string[]> {
+  const m: Record<string, Set<string>> = {};
+  for (const [acc, bucket] of Object.entries(buckets)) {
+    const set = (m[acc] ??= new Set());
+    for (const [d, day] of Object.entries(bucket)) {
+      if (dates && !dates.has(d)) continue;
+      for (const k of Object.keys(day)) {
+        if (k !== 'A') set.add(k.toLowerCase());
+      }
+    }
+  }
+  return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v]]));
 }
 
 /** 标准派生指标（Meta；原型 derive）。分母为 0 → NaN（展示层渲染 '—'） */

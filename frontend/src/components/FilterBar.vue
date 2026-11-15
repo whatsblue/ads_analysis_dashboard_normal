@@ -42,7 +42,10 @@ const accNavs = computed(() =>
   lv1.value === 'meta' ? ([['meta', 'Meta']] as const) : lv1.value === 'google' ? ([['google', 'Google']] as const) : ([['meta', 'Meta'], ['google', 'Google']] as const),
 );
 
-const accItems = computed(() => (accCur.value === 'meta' ? data.metaAccounts : data.gAccounts));
+// 账号下拉候选按所选站点过滤（数仓 account×sales_platform 映射；Google 无站点维不过滤）
+const accItems = computed(() =>
+  accCur.value === 'meta' ? data.metaAccountsOf(filter.applied.sites) : data.gAccounts,
+);
 
 function kwMatch(q: string, lb: string): boolean {
   if (!q) return true;
@@ -108,7 +111,8 @@ const accBtnText = computed(() => {
           : ''
         : accActive.value || (d.metaSel.length || d.metaExcl ? 'meta' : d.gSel.length || d.gExcl ? 'google' : '');
   if (!a) return '请选择';
-  const p = a === 'meta' ? accPart(d.metaSel, d.metaExcl, data.metaAccounts) : accPart(d.gSel, d.gExcl, data.gAccounts);
+  const p =
+    a === 'meta' ? accPart(d.metaSel, d.metaExcl, data.metaAccountsOf(filter.applied.sites)) : accPart(d.gSel, d.gExcl, data.gAccounts);
   return (a === 'meta' ? 'Meta' : 'Google') + ' 账号' + (p === '全' ? '' : '（' + p + '）');
 });
 

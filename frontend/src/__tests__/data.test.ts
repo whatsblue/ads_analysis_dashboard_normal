@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DATA_FILES } from '@ads/shared';
-import type { MonthSlice } from '@ads/shared';
+import { accSitesOfBuckets, DATA_FILES } from '@ads/shared';
+import type { MetaBucket, MonthSlice } from '@ads/shared';
 import { resetDataCache } from '../data';
 import { emptyBuckets, mergeDeep, mergeSlices, neededMonths } from '../data/merge';
 
@@ -85,5 +85,19 @@ describe('mergeDeep / mergeSlices', () => {
     const acc = b.metaAcc as Record<string, Record<string, { A?: number[] }>>;
     expect(acc.AccA['2026-01-31'].A?.[0]).toBe(100);
     expect(acc.AccA['2026-02-01'].A?.[0]).toBe(200);
+  });
+
+  it('accSitesOfBuckets：账号→站点映射（A 键跳过，站点键小写归集）', () => {
+    const cell = (v: number) => [v, 0, 0, 0, 0, 0, 0];
+    const buckets = {
+      AccS: { '2026-01-01': { shopify: cell(10), A: cell(10) } },
+      AccL: { '2026-01-02': { shoplazza: cell(5), A: cell(5) } },
+      AccB: { '2026-01-03': { shopify: cell(1), shoplazza: cell(2), A: cell(3) } },
+    } as unknown as Record<string, MetaBucket>;
+    expect(accSitesOfBuckets(buckets)).toEqual({
+      AccS: ['shopify'],
+      AccL: ['shoplazza'],
+      AccB: ['shopify', 'shoplazza'],
+    });
   });
 });

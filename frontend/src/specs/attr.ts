@@ -55,7 +55,7 @@ export function attrDims(ch: 'meta' | 'google', k: string, dir: number, s: strin
     dims.push(
       top(
         '账号',
-        data.metaAccounts
+        data.metaAccountsOf(filter.applied.sites)
           .filter((a) => !allow || allow.includes(a))
           .map((a) => [a, data.metaAccRange(a, s, e), data.metaAccRange(a, ps, pe)]),
         k,

@@ -31,7 +31,9 @@ const accRows = computed<TableRow[]>(() => {
   const s = filter.applied.start;
   const e = filter.applied.end;
   const allow = filter.applied.metaAccounts;
-  const accs = allow ? data.metaAccounts.filter((a) => allow.includes(a)) : data.metaAccounts;
+  // 账号宇宙按所选站点过滤（数仓 account×sales_platform 映射；Shopify 站不展示 shoplazza 账号）
+  const universe = data.metaAccountsOf(filter.applied.sites);
+  const accs = allow ? universe.filter((a) => allow.includes(a)) : universe;
   const rows = accs.map((a) => ({ label: a, m: data.metaAccRange(a, s, e) }));
   rows.sort((x, y) => y.m.spend - x.m.spend);
   return withCmps(rows, (r, _i, rg) => data.metaAccRange(r.label, rg.start, rg.end));

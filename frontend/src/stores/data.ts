@@ -12,6 +12,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import {
   addMetrics,
+  accSitesOfBuckets,
   googleCellToMetrics,
   metaDayToMetrics,
   sumMetrics,
@@ -196,6 +197,7 @@ export const useDataStore = defineStore('data', () => {
     gSpuB = b.googleSpu as unknown as Record<string, GoogleBucket>;
     gTypeB = b.googleType as unknown as GoogleTypeData;
     gCmpB = b.googleCmp as unknown as GoogleCmpData;
+    rebuildV.value++;
   }
 
   /** 兼容入口（视图 tab 切换调用；分片模式下全部结构已随区间就绪） */
@@ -240,6 +242,28 @@ export const useDataStore = defineStore('data', () => {
   /** 站点键（filter.applied 已解析） */
   function siteKeys(): string[] {
     return filter.siteKeys;
+  }
+  
+  /** 桶重建版本号：分片合并后递增，账号→站点映射等派生缓存随它失效 */
+  const rebuildV = ref(0);
+  
+  /** 账号→站点映射（数仓 account×sales_platform 投放关系；仅统计所选区间日桶，rebuild/换区间后失效） */
+  function accSiteMap(): Record<string, string[]> {
+    return memo(`accSites|${rebuildV.value}|${filter.applied.start}|${filter.applied.end}`, () =>
+      accSitesOfBuckets(metaAccB ?? {}, new Set(dateRange(filter.applied.start, filter.applied.end))),
+    );
+  }
+  
+  /**
+   * 按所选站点过滤的账号清单（账号定位行集合/筛选候选；保持 dims 枚举顺序）。
+   * 映射来自当前区间已加载桶：所选区间+站点下无投放数据的账号不展示（对齐观远账号×渠道映射行为）。
+   */
+  function metaAccountsOf(sites: string[]): string[] {
+    return memo(`accOf|${rebuildV.value}|${[...sites].sort().join('+')}`, () => {
+      const map = accSiteMap();
+      const sset = new Set(sites.map((s) => s.toLowerCase()));
+      return metaAccounts.value.filter((a) => (map[a] ?? []).some((s) => sset.has(s)));
+    });
   }
 
   function metaDayOf(bucket: MetaBucket | undefined, date: string): Metrics | null {
@@ -637,6 +661,7 @@ export const useDataStore = defineStore('data', () => {
     ensureForRange,
     ensureAdList,
     metaAccounts,
+    metaAccountsOf,
     gAccounts,
     metaCampaigns,
     gCampaigns,
