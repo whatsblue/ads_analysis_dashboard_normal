@@ -57,6 +57,13 @@ const GOOGLE_FILTER = `platform = 'google' AND sales_platform = 'shopify' AND dt
 const GOOGLE_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions, SUM(platform_clicks) AS clicks,
        SUM(unified_orders) AS orders, SUM(attributed_sales) AS vs, SUM(platform_conversion_value) AS va, SUM(unified_interactions) AS inter`;
 
+/** Google SPU (gm3) measure: Ads-platform values only -- orders=platform_orders,
+ *  vs-slot=platform_conversion_value (frontend googleCellToMetrics maps value=vs slot).
+ *  unified/attributed fields stopped upstream since 2026-10-29; sharing GOOGLE_MEASURE
+ *  zeroed SPU orders/value/ROAS. Fixed 2026-11-15. */
+const GOOGLE_SPU_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions, SUM(platform_clicks) AS clicks,
+       SUM(platform_orders) AS orders, SUM(platform_conversion_value) AS vs, SUM(platform_conversion_value) AS va, SUM(unified_interactions) AS inter`;
+
 /** 素材子分类桶键规则（对齐原型 RD.sub 抽取侧：按广告名关键词拆分，与 adCodeOf 同款编码正则）：
  *  type 层：XSP 编码→视频广告、XPH 编码→图片广告、其余→红人素材（红人桶=全员，含不含 KOL 归「其他」行，合计=素材类型明细） */
 const SUB_TYPE = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' THEN '视频广告'
@@ -193,8 +200,8 @@ WHERE platform = 'google' AND sales_platform = 'shopify' AND campaign_id IS NOT 
   },
   {
     id: 'google_spu',
-    desc: 'Google SPU×日（gm3；shopify 站点口径）',
-    sql: (p) => `SELECT dt AS date, spu AS spu, ${GOOGLE_MEASURE}
+    desc: 'Google SPU×日（gm3；shopify 站点口径；Ads 后台平台口径 GOOGLE_SPU_MEASURE，订单/转化价值不随归因断供缺数）',
+    sql: (p) => `SELECT dt AS date, spu AS spu, ${GOOGLE_SPU_MEASURE}
 FROM data_warehouse_prod.ads_marketing_spu_daily
 WHERE ${GOOGLE_FILTER} AND spu IS NOT NULL AND spu != ''
 GROUP BY dt, spu`
