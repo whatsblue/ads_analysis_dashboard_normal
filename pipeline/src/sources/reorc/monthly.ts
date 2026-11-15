@@ -10,8 +10,9 @@ import type { DateStr, Dims, MonthSlice } from '@ads/shared';
 import { DimsSchema } from '@ads/shared/schema';
 import type { RawDataset } from '../types';
 import type { ReorcClient, Row } from './client';
+import { SQL_QUERY_PAGE_SIZE_DEFAULT } from './client';
 import { REORC_SCOPE } from './index';
-import { REORC_QUERIES } from './queries';
+import { REORC_QUERIES, type QueryTopic } from './queries';
 import { rowsToDataset, type RowsByTopic } from './rows';
 import { validateDataset } from '../../validate';
 
@@ -36,6 +37,50 @@ export function planMonths(start: DateStr, end: DateStr): MonthWindow[] {
     cur = addMonths(monthStart, 1).slice(0, 7);
   }
   return wins;
+}
+
+/** 窗口中点日期（二分用；保证 mid ∈ [start, end)） */
+function midDate(start: DateStr, end: DateStr): DateStr {
+  const t1 = Date.parse(`${start}T00:00:00Z`);
+  const t2 = Date.parse(`${end}T00:00:00Z`);
+  const mid = new Date(Math.floor((t1 + t2) / 2)).toISOString().slice(0, 10);
+  if (mid < start) return start;
+  if (mid >= end) return addDays(end, -1);
+  return mid;
+}
+
+/**
+ * 自适应窗口拉取：单页未满直接返回；页满（可能被平台钳制截断）把日期窗口二分递归。
+ *
+ * 平台 sql-query API 钳制单页 ≤ SQL_QUERY_PAGE_SIZE_DEFAULT 行，且不支持 SQL 末尾 ORDER BY
+ * （包装器追加页 limit/offset，裸 ORDER BY 语法非法）；offset 翻页在无序 GROUP BY 上行序不稳定
+ * → 页间重复/尾部丢行（2026-11-14 定位：google_spu 10 月 5162 行只入桶 5000、10-29 全天丢失）。
+ * 二分后窗口不重叠、合并无损；页满但恰好完整的边界情况多花 2 次查询，结果不变。
+ */
+async function queryWindow(
+  client: ReorcClient,
+  topic: QueryTopic,
+  connectionId: string,
+  database: string,
+  envId: string,
+  start: DateStr,
+  end: DateStr,
+  pageSize: number,
+  depth = 0,
+): Promise<Row[]> {
+  const sql = topic.sql({ start, end });
+  const rows = await client.sqlQueryAll(connectionId, sql, database, envId, pageSize);
+  if (rows.length < pageSize) return rows;
+  if (start === end || depth > 16) {
+    throw new Error(`主题 ${topic.id} 单日 ${start} 行数达页上限 ${pageSize}，无法二分（检查查询粒度或页大小）`);
+  }
+  const mid = midDate(start, end);
+  const midNext = addDays(mid, 1);
+  const [a, b] = await Promise.all([
+    queryWindow(client, topic, connectionId, database, envId, start, mid, pageSize, depth + 1),
+    queryWindow(client, topic, connectionId, database, envId, midNext, end, pageSize, depth + 1),
+  ]);
+  return [...a, ...b];
 }
 
 /** dims 枚举并集：数组 unique 排序；spuAccs 按键合并；combos/adList 键去重 */
@@ -124,8 +169,7 @@ export async function fetchMonthly(opts: FetchMonthlyOptions): Promise<MonthlyPa
   for (const win of wins) {
     const rows: RowsByTopic = {};
     for (const topic of REORC_QUERIES) {
-      const sql = topic.sql({ start: win.start, end: win.end });
-      const result: Row[] = await opts.client.sqlQueryAll(opts.connectionId, sql, opts.database, opts.envId);
+      const result = await queryWindow(opts.client, topic, opts.connectionId, opts.database, opts.envId, win.start, win.end, SQL_QUERY_PAGE_SIZE_DEFAULT);
       rows[topic.id] = result;
       log(`${win.month} ${topic.id}：${result.length} 行`);
     }

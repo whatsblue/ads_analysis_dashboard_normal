@@ -45,11 +45,13 @@ interface Envelope<T> {
 export interface ReorcClient {
   get<T>(path: string, query?: Record<string, string | number>): Promise<T>;
   post<T>(path: string, body: unknown): Promise<T>;
-  /** 分页执行只读 SQL，返回列名→值的对象行 */
+  /** 分页执行只读 SQL，返回列名→值的对象行。
+   *  注意：offset 翻页要求 SQL 结果集顺序确定（聚合查询必须带与 GROUP BY 同列序的 ORDER BY），
+   *  否则两次翻页间行序不稳定 → 页间重复/尾部丢行（queries.ts 头部统一约定）。 */
   sqlQueryAll(connectionId: string, sql: string, database: string, envId: string, queryPageSize?: number): Promise<Row[]>;
 }
 
-const SQL_QUERY_PAGE_SIZE_DEFAULT = 5000;
+export const SQL_QUERY_PAGE_SIZE_DEFAULT = 5000;
 
 export function createReorcClient(opts: ReorcClientOptions): ReorcClient {
   // 归一化：容忍 DevTools 粘贴的 "Bearer xxx" 形式与首尾空白（docs/SECRETS.md 方式 B）

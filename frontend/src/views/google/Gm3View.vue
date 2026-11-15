@@ -58,6 +58,7 @@ const spuRows = computed<TableRow[]>(() => {
       :cols="G_SPU_COLS"
       no-total
       no-hl
+      g-tips
       :day-fn="(r, d) => data.gSpuRange(r.label, d, d)"
       :tips="{
         orders: '订单：Google Ads 平台转化（platform_orders）',

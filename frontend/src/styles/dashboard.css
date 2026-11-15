@@ -1210,6 +1210,13 @@ tr.exp-row td {
   margin-bottom: 14px;
 }
 
+/* 警示变体（上游归因断供提示：数据缺失非看板故障，避免误读为 bug） */
+.banner.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
 /* ---------- 单选下拉（m5 趋势地区/指标选择） ---------- */
 .cty-panel {
   min-width: 150px;

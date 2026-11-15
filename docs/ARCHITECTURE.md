@@ -120,7 +120,7 @@
 
 ```
 cli.ts --source=reorc（默认）
-  → sources/reorc.ts：调 ReOrc 数据模型 API（预览/导出接口），拉取各维度源数据
+  → sources/reorc/：ReOrc API 通道（client.ts 请求/分页、queries.ts 19 主题 SQL、monthly.ts 月度分片+queryWindow 自适应二分、rows.ts 行→契约桶），拉取各维度源数据
   → build/aggregate.ts：源数据 → 契约桶（对齐原型 extract_real.py 口径：
       滚动重算最近 10 个自然日；历史区间快照不动）
   → validate.ts：契约 schema + 交叉自洽（Σ账号=渠道、Σ组合=Google 渠道、A=Σ站点）
@@ -153,3 +153,5 @@ Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite 
 - Google×shoplazza、TikTok、Snapchat 未接入（与原型一致，dims/契约预留扩展位）。
 - 整站 GMV 为每日 T+1 快照口径（易仓 status=4 已付款，按下单日期），历史月份延迟回填导致历史区间略低于实时数仓——沿用原型口径，页脚保留说明文案。
 - gcmp（Google 系列桶）键为平台数字 ID，名字映射由管道输出至 `google/type.json.cmpNames`。
+- ReOrc 平台 sql-query API 三重限制：①单页钳制 5000 行（body.limit 上限）②拒绝 SQL 末尾裸 ORDER BY（包装器追加页 limit/offset，语法非法）③SQL 内自带 LIMIT 与 body.limit 冲突。offset 翻页在无序 GROUP BY 上行序不稳定 → 页间重复/尾部丢行。解法：monthly.ts `queryWindow` 自适应二分（页满即二分日期窗口递归拉取，窗口不重叠合并不损），queries.ts 禁止末尾 ORDER BY/LIMIT。
+- ReOrc 平台默认库可能漂移（belle_oversea → guanyuan_legacy）：回填/定时任务需显式指定 REORC_DATABASE。

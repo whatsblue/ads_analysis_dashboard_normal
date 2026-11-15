@@ -23,6 +23,10 @@
  *     va=Ads 后台口径 GMV，inter=unified_interactions 全桶携带；age 桶除外，恒 6 度量）
  *   - GMV：amount cnt；EDM：value（归因销售额，前端计入转化价值，无广告花费）
  *   - {{START}}/{{END}} 由渲染时替换（滚动重算窗口）
+ *   - 禁止末尾 ORDER BY/LIMIT 修饰：平台 sql-query API 会包装 SQL（追加页 limit/offset），
+ *     末尾裸 ORDER BY 语法非法（mismatched input 'ORDER'）；翻页丢行问题由 monthly.ts 的
+ *     queryWindow 自适应二分解决（页满即二分日期窗口递归拉取，2026-11-14 定位：无序 GROUP BY
+ *     在两次翻页间行序不稳定 → 页重复/尾部丢行，google_spu 10 月 5162 行只入桶 5000、10-29 全天丢失）
  */
 
 export interface QueryParams {
@@ -53,9 +57,20 @@ const GOOGLE_FILTER = `platform = 'google' AND sales_platform = 'shopify' AND dt
 const GOOGLE_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions, SUM(platform_clicks) AS clicks,
        SUM(unified_orders) AS orders, SUM(attributed_sales) AS vs, SUM(platform_conversion_value) AS va, SUM(unified_interactions) AS inter`;
 
-/** KOL/非KOL 判定与新老素材判定（dim 维表字段） */
-const SUB_KOL = `CASE WHEN d.kol_name IS NOT NULL AND TRIM(d.kol_name) != '' THEN 'KOL' ELSE '非KOL' END`;
-const SUB_AGE = `CASE WHEN SUBSTRING(d.created_time, 1, 10) >= DATE_SUB('{{END}}', INTERVAL 30 DAY) THEN '新素材' ELSE '老素材' END`;
+/** 素材子分类桶键规则（对齐原型 RD.sub 抽取侧：按广告名关键词拆分，与 adCodeOf 同款编码正则）：
+ *  type 层：XSP 编码→视频广告、XPH 编码→图片广告、其余→红人素材（红人桶=全员，含不含 KOL 归「其他」行，合计=素材类型明细） */
+const SUB_TYPE = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' THEN '视频广告'
+       WHEN f.ad_name REGEXP '[Xx][Pp][Hh][0-9]{3,}' THEN '图片广告' ELSE '红人素材' END`;
+/** 子分类层：编码素材按 AI 关键词；红人素材桶按 KOL×图片/视频（原型 SUB_DEFS.kol.split） */
+const SUB_SUB = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' OR f.ad_name REGEXP '[Xx][Pp][Hh][0-9]{3,}'
+       THEN CASE WHEN f.ad_name LIKE '%AI%' THEN 'AI' ELSE '非AI' END
+       WHEN f.ad_name NOT LIKE '%KOL%' THEN '其他' WHEN f.ad_name LIKE '%图片%' THEN '图片'
+       WHEN f.ad_name LIKE '%视频%' THEN '视频' ELSE '其他' END`;
+/** 新旧/付费分类层（原型 alt.split 定版）：视频含 NEW=新/否则复刻；图片含 XMB=新/FK=复刻/其余其他；红人含「付费」=付费红人 */
+const SUB_SUB2 = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' THEN CASE WHEN f.ad_name LIKE '%NEW%' THEN '新素材' ELSE '复刻素材' END
+       WHEN f.ad_name REGEXP '[Xx][Pp][Hh][0-9]{3,}' THEN CASE WHEN f.ad_name LIKE '%XMB%' THEN '新素材'
+       WHEN f.ad_name LIKE '%FK%' THEN '复刻素材' ELSE '其他' END
+       WHEN f.ad_name LIKE '%付费%' THEN '付费红人' ELSE '非付费红人' END`;
 /** 创意格式中文 → IMAGE/VIDEO（原型 ctype 口径） */
 const CTYPE = `CASE WHEN f.creative_type LIKE '%视频%' THEN 'VIDEO' WHEN f.creative_type LIKE '%图片%' THEN 'IMAGE'
        ELSE COALESCE(NULLIF(TRIM(f.creative_type), ''), 'OTHER') END`;
@@ -66,7 +81,7 @@ export const REORC_QUERIES: QueryTopic[] = [
     sql: (p) => `SELECT dt AS date, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_channel_daily
 WHERE ${META_FILTER}
-GROUP BY dt, LOWER(sales_platform)`
+GROUP BY dt, LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -75,7 +90,7 @@ GROUP BY dt, LOWER(sales_platform)`
     sql: (p) => `SELECT dt AS date, account AS account, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_channel_daily
 WHERE ${META_FILTER}
-GROUP BY dt, account, LOWER(sales_platform)`
+GROUP BY dt, account, LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -84,7 +99,7 @@ GROUP BY dt, account, LOWER(sales_platform)`
     sql: (p) => `SELECT dt AS date, campaign_name AS campaign, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_campaign_daily
 WHERE ${META_FILTER}
-GROUP BY dt, campaign_name, LOWER(sales_platform)`
+GROUP BY dt, campaign_name, LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -93,7 +108,7 @@ GROUP BY dt, campaign_name, LOWER(sales_platform)`
     sql: (p) => `SELECT dt AS date, spu AS spu, account AS account, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_spu_daily
 WHERE platform = 'meta' AND spu IS NOT NULL AND spu != '' AND dt BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY dt, spu, account, LOWER(sales_platform)`
+GROUP BY dt, spu, account, LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -102,7 +117,7 @@ GROUP BY dt, spu, account, LOWER(sales_platform)`
     sql: (p) => `SELECT dt AS date, COALESCE(country_code, 'UNKNOWN') AS country, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_country_daily
 WHERE ${META_FILTER}
-GROUP BY dt, COALESCE(country_code, 'UNKNOWN'), LOWER(sales_platform)`
+GROUP BY dt, COALESCE(country_code, 'UNKNOWN'), LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -111,27 +126,25 @@ GROUP BY dt, COALESCE(country_code, 'UNKNOWN'), LOWER(sales_platform)`
     sql: (p) => `SELECT dt AS date, age_group AS age, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_age_daily
 WHERE ${META_FILTER}
-GROUP BY dt, age_group, LOWER(sales_platform)`
+GROUP BY dt, age_group, LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
     id: 'meta_sub',
-    desc: 'Meta 素材类型×KOL子分类×日（m4 KOL/非KOL；dim 维表 JOIN）',
-    sql: (p) => `SELECT f.dt AS date, d.material_type AS type, ${SUB_KOL} AS sub, LOWER(f.sales_platform) AS site, ${META_MEASURE}
+    desc: 'Meta 素材子分类×日（m4 双表；广告名关键词规则对齐原型 RD.sub：红人素材 KOL×图片/视频、视频/图片广告×AI/非AI）',
+    sql: (p) => `SELECT f.dt AS date, ${SUB_TYPE} AS type, ${SUB_SUB} AS sub, LOWER(f.sales_platform) AS site, ${META_MEASURE}
 FROM ${META_BY_AD} f
-LEFT JOIN belle_oversea.dim_facebook_ad_info_mapping_current d ON f.ad_id = d.ad_id
 WHERE f.${META_FILTER}
-GROUP BY f.dt, d.material_type, ${SUB_KOL}, LOWER(f.sales_platform)`
+GROUP BY f.dt, type, sub, LOWER(f.sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
     id: 'meta_sub2',
-    desc: 'Meta 素材类型×新老素材×日（m4；创建时间 30 天内=新素材）',
-    sql: (p) => `SELECT f.dt AS date, d.material_type AS type, ${SUB_AGE} AS sub2, LOWER(f.sales_platform) AS site, ${META_MEASURE}
+    desc: 'Meta 素材新旧/付费分类×日（m4 alt 表；原型 alt.split：NEW/XMB=新、FK=复刻、付费=付费红人）',
+    sql: (p) => `SELECT f.dt AS date, ${SUB_TYPE} AS type, ${SUB_SUB2} AS sub2, LOWER(f.sales_platform) AS site, ${META_MEASURE}
 FROM ${META_BY_AD} f
-LEFT JOIN belle_oversea.dim_facebook_ad_info_mapping_current d ON f.ad_id = d.ad_id
 WHERE f.${META_FILTER}
-GROUP BY f.dt, d.material_type, ${SUB_AGE}, LOWER(f.sales_platform)`
+GROUP BY f.dt, type, sub2, LOWER(f.sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -140,7 +153,7 @@ GROUP BY f.dt, d.material_type, ${SUB_AGE}, LOWER(f.sales_platform)`
     sql: (p) => `SELECT f.dt AS date, ${CTYPE} AS ctype, LOWER(f.sales_platform) AS site, ${META_MEASURE}
 FROM ${META_BY_AD} f
 WHERE f.${META_FILTER}
-GROUP BY f.dt, ${CTYPE}, LOWER(f.sales_platform)`
+GROUP BY f.dt, ${CTYPE}, LOWER(f.sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -150,7 +163,7 @@ GROUP BY f.dt, ${CTYPE}, LOWER(f.sales_platform)`
        COALESCE(NULLIF(TRIM(f.creative_code), ''), f.ad_id) AS ad_no, LOWER(f.sales_platform) AS site, ${META_MEASURE}
 FROM ${META_BY_AD} f
 WHERE f.${META_FILTER}
-GROUP BY f.dt, f.ad_name, f.creative_type, COALESCE(NULLIF(TRIM(f.creative_code), ''), f.ad_id), LOWER(f.sales_platform)`
+GROUP BY f.dt, f.ad_name, f.creative_type, COALESCE(NULLIF(TRIM(f.creative_code), ''), f.ad_id), LOWER(f.sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -159,7 +172,7 @@ GROUP BY f.dt, f.ad_name, f.creative_type, COALESCE(NULLIF(TRIM(f.creative_code)
     sql: (p) => `SELECT dt AS date, ${GOOGLE_MEASURE}
 FROM data_warehouse_prod.ads_marketing_channel_daily
 WHERE ${GOOGLE_FILTER}
-GROUP BY dt`
+GROUP BY dt`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -168,7 +181,7 @@ GROUP BY dt`
     sql: (p) => `SELECT dt AS date, account AS account, ${GOOGLE_MEASURE}
 FROM data_warehouse_prod.ads_marketing_channel_daily
 WHERE ${GOOGLE_FILTER}
-GROUP BY dt, account`
+GROUP BY dt, account`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -176,8 +189,7 @@ GROUP BY dt, account`
     desc: 'Google 系列 ID→名称（cmpNames；非聚合查询；shopify 站点口径）',
     sql: () => `SELECT DISTINCT campaign_id AS campaign_id, campaign_name AS campaign_name
 FROM data_warehouse_prod.ads_marketing_campaign_daily
-WHERE platform = 'google' AND sales_platform = 'shopify' AND campaign_id IS NOT NULL AND TRIM(campaign_id) != ''
-LIMIT 100000`,
+WHERE platform = 'google' AND sales_platform = 'shopify' AND campaign_id IS NOT NULL AND TRIM(campaign_id) != ''LIMIT 100000`,
   },
   {
     id: 'google_spu',
@@ -185,7 +197,7 @@ LIMIT 100000`,
     sql: (p) => `SELECT dt AS date, spu AS spu, ${GOOGLE_MEASURE}
 FROM data_warehouse_prod.ads_marketing_spu_daily
 WHERE ${GOOGLE_FILTER} AND spu IS NOT NULL AND spu != ''
-GROUP BY dt, spu`
+GROUP BY dt, spu`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -194,7 +206,7 @@ GROUP BY dt, spu`
     sql: (p) => `SELECT dt AS date, google_ad_type_group AS type, brand_keyword_type AS brand, ${GOOGLE_MEASURE}
 FROM data_warehouse_prod.ads_google_deep_dive_daily
 WHERE sales_platform = 'shopify' AND dt BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY dt, google_ad_type_group, brand_keyword_type`
+GROUP BY dt, google_ad_type_group, brand_keyword_type`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -203,7 +215,7 @@ GROUP BY dt, google_ad_type_group, brand_keyword_type`
     sql: (p) => `SELECT dt AS date, COALESCE(country_code, 'UNKNOWN') AS country, ${GOOGLE_MEASURE}
 FROM data_warehouse_prod.ads_marketing_country_daily
 WHERE ${GOOGLE_FILTER}
-GROUP BY dt, COALESCE(country_code, 'UNKNOWN')`
+GROUP BY dt, COALESCE(country_code, 'UNKNOWN')`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -213,7 +225,7 @@ GROUP BY dt, COALESCE(country_code, 'UNKNOWN')`
        SUM(platform_clicks) AS clicks, SUM(platform_orders) AS orders, SUM(sales) AS vs, SUM(platform_conversion_value) AS va
 FROM data_warehouse_prod.ads_marketing_age_daily
 WHERE ${GOOGLE_FILTER}
-GROUP BY dt, age_group`
+GROUP BY dt, age_group`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -222,7 +234,7 @@ GROUP BY dt, age_group`
     sql: (p) => `SELECT platform_paid_date AS date, LOWER(platform) AS site, SUM(sale_usd) AS amount, SUM(qty) AS cnt
 FROM belle_oversea.ads_ec_mul_platform_sales_daily
 WHERE platform_paid_date BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY platform_paid_date, LOWER(platform)`
+GROUP BY platform_paid_date, LOWER(platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -231,7 +243,7 @@ GROUP BY platform_paid_date, LOWER(platform)`
     sql: (p) => `SELECT sale_date AS date, SUM(sales_afterreturn) AS value
 FROM belle_oversea.ads_shopify_operationdata_edmreport_d
 WHERE sale_date BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY sale_date`
+GROUP BY sale_date`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
 ];

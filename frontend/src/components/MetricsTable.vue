@@ -62,6 +62,8 @@ const props = withDefaults(
     noTotal?: boolean;
     noHl?: boolean;
     noPct?: boolean;
+    /** 表级 tip 文案用 Google 版（原型 gTips：std derive 但 Google 口径提示，如 gm3 SPU 排行） */
+    gTips?: boolean;
     /** 展开行组（素材编号）：返回成员行 */
     expOf?: ((r: TableRow) => { label: string; m: Metrics }[]) | null;
     /** 按日取数（导出按日粒度） */
@@ -87,6 +89,7 @@ const props = withDefaults(
     noTotal: false,
     noHl: false,
     noPct: false,
+    gTips: false,
     expOf: null,
     dayFn: null,
     attrOn: false,
@@ -141,12 +144,27 @@ const cols = computed<ColDef[]>(() => {
 
 const groups = computed<GroupMap>(() => {
   const gsrc = props.gmap ?? (props.mode === 'std' && !props.cols ? METRIC_GROUPS : null);
-  if (!gsrc) return G_GROUP_DEF;
-  return gsrc.map((g) => [g[0], g[1], g[2].filter((k) => (pctOn.value ? true : !PCT_K.includes(k as (typeof PCT_K)[number])))]) as GroupMap;
+  const gm = (gsrc ?? G_GROUP_DEF).map(
+    (g) => [g[0], g[1], g[2].filter((k) => !PCT_K.includes(k as (typeof PCT_K)[number]))] as unknown as GroupMap[number],
+  ) as GroupMap;
+  if (pctOn.value) {
+    // 对齐原型 buildCols pctOn 分支：占比键跟随锚点主键插回所在组，分组行 colspan 恒等于列数（开占比时表头右侧空白列的根因）
+    for (const g of gm) {
+      const cs: string[] = [];
+      for (const k of g[2]) {
+        cs.push(k);
+        if (k === 'spend') cs.push('spend_pct');
+        if (k === 'orders') cs.push('orders_pct');
+        if (k === 'value' || k === 'vs') cs.push('value_pct');
+      }
+      g[2] = cs;
+    }
+  }
+  return gm;
 });
 
 const TIP = computed<Record<string, string>>(() => {
-  const ch = props.mode === 'g' ? 'g' : 'std';
+  const ch = props.mode === 'g' || props.gTips ? 'g' : 'std';
   const out: Record<string, string> = {};
   for (const k of Object.keys(TH_TIP)) out[k] = TH_TIP[k][ch];
   if (props.tips) Object.assign(out, props.tips);

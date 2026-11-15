@@ -44,6 +44,13 @@ const prev = computed<Metrics | null>(() => {
   return rg ? data.gTotRange(rg.start, rg.end) : null;
 });
 
+/** Shopify 站点归因断供检测：花费与 Ads 后台口径正常但归因三字段全 0 → 上游数仓 join 断供（2026-10-29 起）；恢复后本提示自动消失 */
+const gapWarn = computed(() => {
+  void filter.applied.version;
+  const m = all.value;
+  return m.spend > 0 && !m.vs && !m.orders;
+});
+
 const kpis = computed(() => {
   const dG = deriveG(all.value)!;
   const dP = prev.value ? deriveG(prev.value) : null;
@@ -94,6 +101,9 @@ const rows = computed<TableRow[]>(() => {
   <template v-if="ready">
     <div class="ptitle"><h2>◎ 大盘健康度</h2></div>
     <div class="banner">ⓘ Google 双口径：<b>Shopify attribution</b>（考核）vs <b>Ads 后台</b>（投放优化）</div>
+    <div class="banner warn" v-if="gapWarn">
+      ⚠ 检测到 Shopify 站点归因数据（订单 / 归因销售额 / 归因访问数）上游数仓断供：本期 Google 花费与 Ads 后台口径正常，但订单、ROAS(Shopify)、CVR、客单价暂为 0。待上游恢复后每日自动同步将回补历史数据。
+    </div>
     <div class="kpis">
       <KpiCard v-for="k in kpis" :key="k.title" :title="k.title" :value="k.value" :cur="k.cur" :prev="k.prev" />
     </div>
