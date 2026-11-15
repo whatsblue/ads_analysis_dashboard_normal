@@ -66,7 +66,8 @@ export function removeDataDir(outDir: string): void {
   rmSync(outDir, { recursive: true, force: true });
 }
 
-/** v3：manifest + dims + months/<YYYY-MM>.json；先全局文件后 manifest（加载器以 manifest 为准） */
+/** v3：manifest + dims（core，无 adList）+ dims-ads.json（adList 懒加载拆分）+ months/<YYYY-MM>.json；
+ *  先全局文件后 manifest（加载器以 manifest 为准） */
 export interface MonthlyEmitPayload {
   manifest: RawDataset['manifest'];
   dims: RawDataset['dims'];
@@ -85,7 +86,11 @@ export function emitMonthly(payload: MonthlyEmitPayload, outDir: string): EmitRe
     renameSync(tmp, target);
     files.push({ path: rel, bytes: buf.byteLength });
   };
-  write('dims.json', payload.dims);
+  // dims 拆分：core（无 adList）+ dims-ads.json（adList 专文件，前端仅 m4 下钻懒加载）
+  const { adList, ...coreDims } = payload.dims;
+  void adList;
+  write('dims.json', coreDims);
+  write('dims-ads.json', { adList: payload.dims.adList });
   for (const s of payload.slices) write(`months/${s.month}.json`, s);
   write('manifest.json', payload.manifest); // 最后写：前端以 manifest.v/months 为准
   cleanupTmpMonths(outDir);

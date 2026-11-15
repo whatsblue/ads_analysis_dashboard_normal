@@ -41,6 +41,11 @@ export function loadDims(): Promise<Dims> {
   return load<Dims>(DATA_FILES.dims, 'dims.json');
 }
 
+/** dims-ads.json（adList 专文件）：m4 下钻专用大数组，非首屏必需，懒加载/预取 warm HTTP 缓存 */
+export function loadDimsAds(): Promise<{ adList: Dims['adList'] }> {
+  return load<{ adList: Dims['adList'] }>(DATA_FILES.dimsAds, 'dims-ads.json');
+}
+
 /** 月分片按需加载（月名来自 manifest.months；缓存键含月份） */
 export function loadSlice(month: string): Promise<MonthSlice> {
   return load<MonthSlice>(`months/${month}.json`, `months/${month}.json`);

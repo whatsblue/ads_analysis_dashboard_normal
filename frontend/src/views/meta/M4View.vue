@@ -37,10 +37,12 @@ function typeOK(t: string): boolean {
   return typeExcl.value ? typeSel.value.length > 0 && !typeSel.value.includes(t) : !typeSel.value.length || typeSel.value.includes(t);
 }
 
-function enterDrill(code: string): void {
+async function enterDrill(code: string): Promise<void> {
   if (!saved) saved = { sel: typeSel.value.slice(), excl: typeExcl.value };
   typeExcl.value = false;
   typeSel.value = [code];
+  // 下钻 Top 素材依赖 adList（dims-ads.json 懒加载，2.6MB 不进首屏）；idle 预取后此处通常缓存命中近同步
+  await data.ensureAdList();
   drill.value = code;
 }
 

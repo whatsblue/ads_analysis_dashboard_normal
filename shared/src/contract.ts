@@ -130,10 +130,13 @@ export interface MonthSlice {
   googleCmp: GoogleCmpData;
 }
 
-/** v3 全局文件（月分片文件由加载器按 manifest.months 拼 URL，不在此表） */
+/** v3 全局文件（月分片文件由加载器按 manifest.months 拼 URL，不在此表）。
+ *  dims.json 不含 adList（m4 下钻专用大数组，3 万+ 条），拆至 dims-ads.json 懒加载：
+ *  首屏体积 3.3MB→0.7MB，adList 仅在进入 m4 下钻时拉取（2026-11-15 加载性能优化） */
 export const DATA_FILES = {
   manifest: 'manifest.json',
   dims: 'dims.json',
+  dimsAds: 'dims-ads.json',
 } as const;
 
 export type DataFileKey = keyof typeof DATA_FILES;
