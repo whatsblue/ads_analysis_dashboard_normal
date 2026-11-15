@@ -215,7 +215,7 @@ export const TH_TIP: Record<string, { std: string; g: string }> = {
   roas_a: { std: '', g: 'ROAS＝Ads 后台转化价值÷花费（投放参考）' },
 };
 
-/** Meta 国家维度趋势对比指标（12 项单选，原型 CTY_TREND_METRICS） */
+/** Meta 国家维度趋势对比指标（10 项多选上限 2；2026-11-15 用户定版去除单次加购/单次结帐，原型 CTY_TREND_METRICS） */
 export const CTY_TREND_METRICS: { k: string; name: string; fmt: (v: number | null | undefined) => string }[] = [
   { k: 'spend', name: '花费', fmt: fmtMoney },
   { k: 'orders', name: '订单', fmt: fmtInt },
@@ -224,8 +224,6 @@ export const CTY_TREND_METRICS: { k: string; name: string; fmt: (v: number | nul
   { k: 'cpc', name: 'CPC', fmt: fmtMoney },
   { k: 'ctr', name: 'CTR', fmt: fmtPct },
   { k: 'cvr', name: 'CVR', fmt: fmtPct },
-  { k: 'cpa_atc', name: '单次加购', fmt: fmtMoney },
-  { k: 'cpa_ckt', name: '单次结帐', fmt: fmtMoney },
   { k: 'cpa_ord', name: '单次购买', fmt: fmtMoney },
   { k: 'roas', name: 'ROAS', fmt: fmtRoas },
   { k: 'aov', name: '客单价', fmt: fmtMoney },

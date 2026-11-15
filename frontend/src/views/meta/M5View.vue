@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * Meta · 国家维度（原型 renderM5/renderM5T/renderM5B）：
- * 趋势对比（指标 12 项 + 地区 A/B 单选，默认美国 vs 非美国·花费）
+ * 趋势对比（指标 10 项多选上限 2 + 地区 A/B 单选，默认美国 vs 非美国·花费）
  * + US/Non-US 拆分两行表 + 国家对比明细（默认花费 Top5）。
+ * 趋势图 2026-11-15 用户定版：去单次加购/单次结帐；上限 2 项，先点柱状（左轴）后点折线（右轴）；颜色按国家分组（同国柱线同色）。
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { addMetrics, dateRange, derive, zero, type Metrics } from '@ads/shared';
 import { useDataStore } from '@/stores/data';
 import { useFilterStore } from '@/stores/filter';
@@ -25,7 +26,20 @@ onMounted(async () => {
   await data.ensure('metaDim');
   trendA.value = data.usKey;
   ready.value = true;
+  document.addEventListener('click', closeDd);
+  document.addEventListener('keydown', onEsc);
 });
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeDd);
+  document.removeEventListener('keydown', onEsc);
+});
+
+function closeDd(): void {
+  ddOpen.value = '';
+}
+function onEsc(e: KeyboardEvent): void {
+  if (e.key === 'Escape') closeDd();
+}
 
 /* ================= 趋势对比（原型 renderM5T；2026-11-14 用户定版：去卡头粒度切换固定按日，指标支持多选多线） ================= */
 
@@ -45,22 +59,27 @@ function ctyAggDay(d: string, nm: string): Metrics {
   return data.ctyAgg(data.metaDimDate('ctry', d), key);
 }
 
-const metDefs = computed(() => CTY_TREND_METRICS.filter((m) => trendMs.value.includes(m.k)));
+const metDefs = computed(() =>
+  // 按 trendMs 点击顺序取 def（2026-11-15 定版：先点=柱，不能用定义序重排）
+  trendMs.value
+    .map((k) => CTY_TREND_METRICS.find((m) => m.k === k))
+    .filter((m): m is (typeof CTY_TREND_METRICS)[number] => m !== undefined),
+);
 
 const trendTitle = computed(() => (metDefs.value.length ? metDefs.value.map((m) => m.name).join('/') : CTY_TREND_METRICS[0].name) + '趋势对比');
 
 const metricBtnText = computed(() => {
   const names = metDefs.value.map((m) => m.name);
-  return names.length ? names.slice(0, 2).join(',') + (names.length > 2 ? ' 等' + names.length + '项' : '') : '选择指标';
+  return names.length ? names.join(',') : '选择指标';
 });
 
-/** 指标多选 toggle（点击不关面板，外点关闭）；至少保留一项 */
+/** 指标多选 toggle（点击不关面板，外点关闭）；上限 2（满 2 项再点替换最早选中，保持先点=柱），至少保留一项 */
 function toggleMetric(k: string): void {
   if (trendMs.value.includes(k)) {
     if (trendMs.value.length === 1) return;
     trendMs.value = trendMs.value.filter((x) => x !== k);
   } else {
-    trendMs.value = [...trendMs.value, k];
+    trendMs.value = trendMs.value.length >= 2 ? [...trendMs.value.slice(1), k] : [...trendMs.value, k];
   }
 }
 
@@ -89,26 +108,28 @@ const trendOpt = computed(() => {
       addMetrics(t, ctyAggDay(d, nm));
     }
   }
-  const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#5470c6', '#91cc75', '#fac858'];
-  /* 线序：先指标后地区（同一指标的两地区线相邻成组）；多指标时线名带指标前缀区分 */
+  /* 2026-11-15 定版：颜色按国家分组（A/B 各一色，同国柱线同色）；系列序=先国家后指标；
+     两指标时首指标（先点）柱状挂左轴、次指标折线挂右轴（金额与比率量级分离），单指标维持折线单轴 */
+  const dual = defs.length >= 2;
+  const ctyColors = ['#5470c6', '#91cc75'];
   const fmtMap: Record<string, (v: number) => string> = {};
-  const series = defs.flatMap((md, mi) =>
-    labels.map((lb, ri) => {
+  const series = labels.flatMap((lb, ri) =>
+    defs.map((md, mi) => {
       const name = defs.length > 1 ? md.name + '·' + lb : lb;
       fmtMap[name] = md.fmt;
-      return {
+      const isBar = dual && mi === 0;
+      const base = {
         name,
-        type: 'line' as const,
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 5,
-        itemStyle: { color: colors[(mi * 2 + ri) % colors.length] },
-        lineStyle: { width: 2 },
+        type: isBar ? ('bar' as const) : ('line' as const),
+        itemStyle: { color: ctyColors[ri] },
         data: order.map((k) => {
           const v = (derive(bk[k][names[ri]]) as unknown as Record<string, number>)[md.k];
           return v == null || isNaN(v) ? null : +v.toFixed(2);
         }),
       };
+      return isBar
+        ? base
+        : { ...base, smooth: true, symbol: 'circle', symbolSize: 5, lineStyle: { width: 2 }, yAxisIndex: dual ? 1 : 0 };
     }),
   );
   return {
@@ -126,9 +147,14 @@ const trendOpt = computed(() => {
       },
     },
     legend: { data: series.map((s) => s.name), top: 0 },
-    grid: { left: 56, right: 20, top: 30, bottom: 26 },
+    grid: { left: 56, right: dual ? 56 : 20, top: 30, bottom: 26 },
     xAxis: { type: 'category', data: order },
-    yAxis: { type: 'value', scale: true },
+    yAxis: dual
+      ? [
+          { type: 'value', scale: true },
+          { type: 'value', scale: true, splitLine: { show: false } },
+        ]
+      : { type: 'value', scale: true },
     series,
   };
 });
