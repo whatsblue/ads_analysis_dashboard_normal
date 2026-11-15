@@ -115,8 +115,8 @@ export const useFilterStore = defineStore('filter', () => {
 
   let initialized = false;
 
-  /** 首屏以 manifest 默认区间初始化（sessionStorage 已有则恢复） */
-  function initDefaults(viewStart: string, viewEnd: string, metaAccounts: string[], gAccounts: string[]): void {
+  /** 首屏以 manifest 默认区间初始化（sessionStorage 已有则恢复）；不依赖 dims（首屏并行拉取，账号宇宙由 setAccountUniverse 后补） */
+  function initDefaults(viewStart: string, viewEnd: string): void {
     if (initialized) return;
     initialized = true;
     const saved = readSaved();
@@ -128,9 +128,6 @@ export const useFilterStore = defineStore('filter', () => {
     }
     draft.start = applied.start = viewStart;
     draft.end = applied.end = viewEnd;
-    // 账号全选语义=null；草稿空数组
-    void metaAccounts;
-    void gAccounts;
   }
 
   function readSaved(): { draft: DraftFilters; applied: AppliedFilters } | null {

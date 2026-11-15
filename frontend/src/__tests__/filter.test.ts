@@ -42,7 +42,7 @@ describe('filter store（草稿/生效/排除语义）', () => {
   function freshStore() {
     const f = useFilterStore();
     f.setAccountUniverse(['A1', 'A2', 'A3'], ['G1', 'G2']);
-    f.initDefaults('2024-05-06', '2024-05-12', ['A1', 'A2', 'A3'], ['G1', 'G2']);
+    f.initDefaults('2024-05-06', '2024-05-12');
     return f;
   }
 
@@ -104,7 +104,7 @@ describe('withCmps（三行组挂载）', () => {
   it('按行索引对齐对比日（day=对比期起始+i），透传周期区间', () => {
     const f = useFilterStore();
     f.setAccountUniverse([], []);
-    f.initDefaults('2024-05-06', '2024-05-12', [], []);
+    f.initDefaults('2024-05-06', '2024-05-12');
     f.apply();
 
     const rows: TableRow[] = [

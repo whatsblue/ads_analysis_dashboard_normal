@@ -30,7 +30,7 @@ import {
   type MonthSlice,
 } from '@ads/shared';
 import { dateRange } from '@ads/shared';
-import { loadDims, loadManifest, loadSlice } from '@/data';
+import { loadDims, loadDimsAds, loadManifest, loadSlice } from '@/data';
 import { emptyBuckets, mergeSlices, neededMonths } from '@/data/merge';
 import { useFilterStore } from './filter';
 import { adCodeOf } from '@/specs/columns';
@@ -93,18 +93,27 @@ export const useDataStore = defineStore('data', () => {
     return v;
   }
 
-  /** 首屏：manifest（契约校验）+ dims + 默认区间月分片，并初始化筛选默认区间 */
+  /** 首屏：manifest（契约校验）+ dims + 默认区间月分片并行拉取（消除串行瀑布），并初始化筛选默认区间 */
   async function init(): Promise<void> {
     if (manifest.value) return;
     const m = await loadManifest();
-    const d = await loadDims();
     manifest.value = m;
-    dims.value = d;
-    const accounts = metaAccounts.value;
-    const gAcc = gAccounts.value;
-    filter.setAccountUniverse(accounts, gAcc);
-    filter.initDefaults(m.range.viewStart, m.range.viewEnd, accounts, gAcc);
-    await ensureForRange();
+    // 默认区间先就位（不依赖 dims）→ dims 与首屏分片同时发起，避免 dims 3.3MB 串行阻塞分片请求
+    filter.initDefaults(m.range.viewStart, m.range.viewEnd);
+    const missing = needMonths().filter((mm) => !slices.has(mm));
+    if (missing.length) rangeReady.value = false;
+    try {
+      const [d, loaded] = await Promise.all([
+        loadDims(),
+        Promise.all(missing.map(async (mm) => [mm, await loadSlice(mm)] as const)),
+      ]);
+      dims.value = d;
+      filter.setAccountUniverse(metaAccounts.value, gAccounts.value);
+      for (const [mm, sl] of loaded) slices.set(mm, sl);
+      rebuildBuckets();
+    } finally {
+      rangeReady.value = true;
+    }
     // 区间/环比变更 → 增量补载缺失月分片；加载期间 rangeReady=false，App 层遮罩
     watch(
       () => filter.applied.version,
@@ -116,6 +125,33 @@ export const useDataStore = defineStore('data', () => {
         });
       },
     );
+    prefetchRest();
+  }
+
+  /** adList（dims-ads.json）懒加载：仅 m4 下钻需要（3 万+ 条）；幂等，进下钻前 await */
+  const adListLoaded = ref(false);
+  async function ensureAdList(): Promise<void> {
+    if (adListLoaded.value || !dims.value) return;
+    const { adList: ads } = await loadDimsAds();
+    if (!Array.isArray(ads)) throw new Error('dims-ads.json 契约异常：adList 非数组');
+    dims.value = { ...dims.value, adList: ads };
+    adListLoaded.value = true;
+  }
+
+  /** 空闲时后台预取其余月分片与 adList（仅 warm HTTP 缓存，不重建内存桶：
+   *  切换历史区间时 ensureForRange 命中缓存秒回，parse+merge 延迟到真正需要时；预取失败静默，用时增量加载兑底 */
+  function prefetchRest(): void {
+    const warm = () => {
+      for (const mm of manifest.value?.months ?? []) {
+        if (!slices.has(mm)) void loadSlice(mm).catch(() => { /* 兑底 */ });
+      }
+      void loadDimsAds().catch(() => { /* 兑底 */ });
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as unknown as { requestIdleCallback: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback(warm, { timeout: 8000 });
+    } else {
+      setTimeout(warm, 1500);
+    }
   }
 
   /** 选中区间 ∪ 环比区间 → 应加载月列表（manifest.months 交集） */
@@ -599,6 +635,7 @@ export const useDataStore = defineStore('data', () => {
     init,
     ensure,
     ensureForRange,
+    ensureAdList,
     metaAccounts,
     gAccounts,
     metaCampaigns,

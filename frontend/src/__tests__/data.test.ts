@@ -6,9 +6,10 @@ import { emptyBuckets, mergeDeep, mergeSlices, neededMonths } from '../data/merg
 
 describe('数据访问层契约（v3 月分片）', () => {
   it('DATA_FILES 仅含全局文件（月分片由 loader 按 months 拼路径）', () => {
-    expect(Object.keys(DATA_FILES)).toHaveLength(2);
+    expect(Object.keys(DATA_FILES)).toHaveLength(3);
     expect(DATA_FILES.manifest).toBe('manifest.json');
     expect(DATA_FILES.dims).toBe('dims.json');
+    expect(DATA_FILES.dimsAds).toBe('dims-ads.json');
   });
 
   it('resetDataCache 可重置（fetch 尚未发生不报错）', () => {
