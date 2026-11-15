@@ -236,6 +236,7 @@ function topDayFn(r: TableRow, d: string): Metrics {
         </template>
       </MetricsTable>
 
+      <!-- 2026-11-15 用户定版：标题/筛选与两个明细表同卡，表明筛选作用于下方两表（原型 m4sub 单卡双表结构） -->
       <div class="card">
         <div class="card-h">
           <span>素材子分类明细</span>
@@ -243,27 +244,27 @@ function topDayFn(r: TableRow, d: string): Metrics {
             <button v-for="d in SUB_DEFS" :key="d.key" :class="{ on: subTab === d.key }" @click="subTab = d.key">{{ d.name }}</button>
           </span>
         </div>
+        <MetricsTable
+          tid="m4sub"
+          :title="subDef.t1"
+          no-card
+          head-style="padding-top: 4px"
+          first-col="子分类"
+          :rows="sub1Rows"
+          :sort-col="null"
+          :day-fn="(r, d) => data.subDay(false, subDef.typeName, r.label, d)"
+        />
+        <MetricsTable
+          tid="m4sub2"
+          :title="subDef.alt.title"
+          no-card
+          head-style="border-top: 1px solid var(--line)"
+          first-col="子分类"
+          :rows="sub2Rows"
+          :sort-col="null"
+          :day-fn="(r, d) => data.subDay(true, subDef.typeName, r.label, d)"
+        />
       </div>
-      <MetricsTable
-        tid="m4sub"
-        :title="subDef.t1"
-        no-card
-        head-style="padding-top: 4px"
-        first-col="子分类"
-        :rows="sub1Rows"
-        :sort-col="null"
-        :day-fn="(r, d) => data.subDay(false, subDef.typeName, r.label, d)"
-      />
-      <MetricsTable
-        tid="m4sub2"
-        :title="subDef.alt.title"
-        no-card
-        head-style="border-top: 1px solid var(--line)"
-        first-col="子分类"
-        :rows="sub2Rows"
-        :sort-col="null"
-        :day-fn="(r, d) => data.subDay(true, subDef.typeName, r.label, d)"
-      />
     </template>
 
     <!-- 下钻态：Top 素材分析 -->
