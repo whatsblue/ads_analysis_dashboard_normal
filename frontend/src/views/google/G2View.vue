@@ -36,6 +36,14 @@ const ctyTop5 = computed(() => {
     .map((r) => r.ct);
 });
 
+/** 下拉仅列当前筛选范围内有投放（花费>0）的国家——全历史宇宙累计 108 项，含大量已停投国家的全 0 可选项 */
+const ctyItems = computed(() => {
+  void filter.applied.version;
+  const s = filter.applied.start;
+  const e = filter.applied.end;
+  return data.countries.filter((ct) => data.gCtyRange(ct, s, e).spend > 0);
+});
+
 const ctyRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const s = filter.applied.start;
@@ -59,7 +67,7 @@ function ctySelLb(k: string): string {
       <span class="frow">
         <MultiDropdown
           all-name="国家"
-          :items="data.countries"
+          :items="ctyItems"
           :selected="ctySel"
           :excl="ctyExcl"
           clearable

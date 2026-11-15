@@ -88,7 +88,14 @@ function ctySelLb(k: string): string {
   return k === data.usKey ? 'US' : k;
 }
 
-const regionOpts = computed(() => ['非美国', data.usKey, ...data.countries.filter((c) => c !== data.usKey)]);
+/** 下拉仅列当前筛选范围内有投放（花费>0）的国家——全历史宇宙累计 108 项，含大量已停投国家的全 0 可选项 */
+const ctyItems = computed(() => {
+  void filter.applied.version;
+  const o = data.metaDimRange('ctry', filter.applied.start, filter.applied.end);
+  return data.countries.filter((k) => (o[k]?.spend ?? 0) > 0);
+});
+
+const regionOpts = computed(() => ['非美国', data.usKey, ...ctyItems.value.filter((c) => c !== data.usKey)]);
 
 const trendOpt = computed(() => {
   void filter.applied.version;
@@ -261,7 +268,7 @@ const ctyRows = computed<TableRow[]>(() => {
       <template #head-extra>
         <MultiDropdown
           all-name="国家"
-          :items="data.countries"
+          :items="ctyItems"
           :selected="ctySel"
           :excl="ctyExcl"
           clearable
