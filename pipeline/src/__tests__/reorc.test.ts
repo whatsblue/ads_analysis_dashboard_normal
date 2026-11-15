@@ -208,7 +208,7 @@ function topicRows(sql: string, metaRows: (site: string, acc: string) => Row[], 
     { date: '2026-11-10', site: 'shopify', spend: 100, impressions: 1000, clicks: 50, orders: 5, value: 250, atc: 10, ckt: 8, inter: 60 },
   ];
   if (sql.includes('ads_ec_mul_platform_sales_daily')) return [{ date: '2026-11-10', site: 'shopify', amount: 800, cnt: 6 }];
-  if (sql.includes('edmreport')) return [{ date: '2026-11-10', value: 12.5 }];
+  if (sql.includes('ods_edm_ads_shopify_marketing_attribution_daily')) return [{ date: '2026-11-10', value: 12.5 }];
   if (sql.includes('DISTINCT campaign_id')) return [{ campaign_id: 123, campaign_name: 'PMAX Bella' }];
   if (sql.includes("'meta'")) {
     if (sql.includes('AS spu')) return withDim(metaRows('shopify', 'acc1'), { spu: 'SKU-A', account: 'acc1' });

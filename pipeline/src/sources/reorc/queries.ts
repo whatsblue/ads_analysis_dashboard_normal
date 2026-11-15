@@ -7,7 +7,7 @@
  *   - data_warehouse_prod.ads_marketing_creative_by_ad_daily  广告×日（ad_name/creative_type/creative_code）
  *   - belle_oversea.dim_facebook_ad_info_mapping_current   Meta 广告维表（material_type/kol_name/created_time）
  *   - belle_oversea.ads_ec_mul_platform_sales_daily        易仓已付款订单日汇总（整站 GMV 口径）
- *   - belle_oversea.ads_shopify_operationdata_edmreport_d  Shopify EDM 归因日销售（utm=Klaviyo，2026-09 起有数）
+ *   - data_warehouse_prod.ods_edm_ads_shopify_marketing_attribution_daily  Shopify EDM 营销归因日销售（utm=Klaviyo+CartSee，2025-01 起全历史；2026-11-15 切换：原 edmreport_d 仅 2026-09 起有数致 1-8 月 EDM 缺失）
  *
  * 口径映射：clicks=platform_link_clicks（链接点击，CVR 分子）、inter=platform_clicks（全部点击）；
  *          Google：clicks=platform_clicks（Google Ads interactions，观远后台口径；数仓 link_clicks 恒 0）、
@@ -239,11 +239,12 @@ GROUP BY platform_paid_date, LOWER(platform)`
   },
   {
     id: 'edm',
-    desc: 'EDM 渠道日归因销售额（Shopify 订单 utm=Klaviyo，sales_afterreturn 退货后口径；无广告花费，前端计入转化价值）',
-    sql: (p) => `SELECT sale_date AS date, SUM(sales_afterreturn) AS value
-FROM belle_oversea.ads_shopify_operationdata_edmreport_d
-WHERE sale_date BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY sale_date`
+    desc: 'EDM 渠道日归因销售额（Shopify 营销归因 utm=Klaviyo+CartSee，net=total_sales−reversals 退货后口径，与观远 BI 逐位一致；无广告花费，前端计入转化价值）',
+    sql: (p) => `SELECT dt AS date, SUM(total_sales) - SUM(sales_reversals) AS value
+FROM data_warehouse_prod.ods_edm_ads_shopify_marketing_attribution_daily
+WHERE dt BETWEEN '{{START}}' AND '{{END}}'
+GROUP BY dt
+`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
 ];
