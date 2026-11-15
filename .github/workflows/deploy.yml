@@ -2,6 +2,7 @@ name: Deploy Pages
 
 # 前端/共享代码变更 → 构建并部署 GitHub Pages
 # 数据文件的每日更新由 update-data.yml 负责（GITHUB_TOKEN push 不触发本 workflow）
+# 注：deploy-pages@v4 偶发瞬时失败（Pages 服务端），修改本文件任意行可重新触发部署
 on:
   push:
     branches: [main]
