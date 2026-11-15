@@ -20,10 +20,17 @@ const el = ref<HTMLDivElement | null>(null);
 let chart: echarts.ECharts | null = null;
 let ro: ResizeObserver | null = null;
 
+/** tooltip 统一 confine（2026-11-15 用户定版）：悬浮说明限制在画布内完整展示，不随超出容器边缘被裁剪 */
+function withConfine(o: Record<string, unknown>): Record<string, unknown> {
+  const tip = o.tooltip as Record<string, unknown> | undefined;
+  if (!tip) return o;
+  return { ...o, tooltip: { ...tip, confine: true } };
+}
+
 onMounted(() => {
   if (!el.value) return;
   chart = echarts.init(el.value);
-  if (props.option) chart.setOption(props.option, true);
+  if (props.option) chart.setOption(withConfine(props.option), true);
   ro = new ResizeObserver(() => chart?.resize());
   ro.observe(el.value);
 });
@@ -31,7 +38,7 @@ onMounted(() => {
 watch(
   () => props.option,
   (o) => {
-    if (chart && o) chart.setOption(o, true);
+    if (chart && o) chart.setOption(withConfine(o), true);
   },
 );
 
