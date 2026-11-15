@@ -94,12 +94,12 @@ export function trendOption(bk: BucketData, barSeries: any[], objs?: ObjLinesSpe
   const lines = objs ? objLines(objs) : [];
   const showTotal = !objs;
   const legendData = barSeries.map((s) => s.name);
-  const lg: any[] = [{ top: 2, type: 'scroll', data: legendData }];
-  if (showTotal) lg.push({ top: 28, data: ['ROAS'] });
+  /* 图例单行并排（2026-11-15 用户定版）：花费系列与 ROAS 同行滚动，不再分两行 */
+  const lg: any[] = [{ top: 2, type: 'scroll', data: showTotal ? [...legendData, 'ROAS'] : legendData }];
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: dualTip },
     legend: lg,
-    grid: { left: 56, right: 56, top: showTotal ? 62 : 36, bottom: 28 },
+    grid: { left: 56, right: 56, top: showTotal ? 40 : 36, bottom: 28 },
     xAxis: { type: 'category', data: bk.keys },
     yAxis: [
       { type: 'value', name: '花费($)', splitLine: { lineStyle: { color: '#eef1f6' } } },
@@ -123,12 +123,14 @@ export function gTrendOpt(bk: BucketData, barSeries: any[], objs?: ObjLinesSpec)
   });
   const lines = objs ? objLines(objs) : [];
   const showTotal = !objs;
-  const lg: any[] = [{ top: 2, type: 'scroll', data: barSeries.map((s) => s.name) }];
-  if (showTotal) lg.push({ top: 28, data: ['ROAS(Shopify)', 'ROAS(Ads后台)'] });
+  /* 图例单行并排（2026-11-15 用户定版）：花费系列与双口径 ROAS 同行滚动，不再分两行 */
+  const lg: any[] = [{ top: 2, type: 'scroll', data: showTotal
+    ? [...barSeries.map((s) => s.name), 'ROAS(Shopify)', 'ROAS(Ads后台)']
+    : barSeries.map((s) => s.name) }];
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: dualTip },
     legend: lg,
-    grid: { left: 56, right: 56, top: showTotal ? 62 : 36, bottom: 28 },
+    grid: { left: 56, right: 56, top: showTotal ? 40 : 36, bottom: 28 },
     xAxis: { type: 'category', data: bk.keys },
     yAxis: [
       { type: 'value', name: '花费($)', splitLine: { lineStyle: { color: '#eef1f6' } } },
