@@ -29,3 +29,4 @@ pipeline/raw/
 
 # research scratch (one-off investigation scripts)
 _research/
+.worktrees/
