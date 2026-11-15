@@ -64,6 +64,14 @@ function googleCell(row: Row): GoogleCell {
   return [num(row.spend), num(row.impressions), num(row.clicks), num(row.orders), num(row.vs), num(row.va)];
 }
 
+/** ctype 原值 → 展示键规范化：VIDEO→视频广告、IMAGE→图片广告（对齐原型 TYPES 中文枚举，m4 主态直读；
+ *  红人素材/目录广告保持业务原值） */
+function ctypeKey(raw: string): string {
+  if (raw === 'VIDEO') return '视频广告';
+  if (raw === 'IMAGE') return '图片广告';
+  return raw;
+}
+
 /** Google 行 → 7 元 cell（v4：第 7 位 = unified_interactions；age 仍走 googleCell 6 元） */
 function googleCell7(row: Row): GoogleCell {
   return [...googleCell(row), num(row.inter)];
@@ -178,7 +186,8 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     putSiteOnly((byDate[date] ??= {}), siteKey(row.site), metaCell(row));
   }
   for (const row of rows.meta_ctype ?? []) {
-    const ctype = str(row.ctype);
+    const ctype = ctypeKey(str(row.ctype));
+    if (!/^unknown$/i.test(ctype)) seen.types.add(ctype);
     putMetaDay(metaDayOf(metaCreative.ctype, ctype, dateStr(row.date, 'meta_ctype')), siteKey(row.site), metaCell(row));
   }
   for (const row of rows.meta_ad ?? []) {

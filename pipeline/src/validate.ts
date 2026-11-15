@@ -39,6 +39,15 @@ export function validateDataset(ds: RawDataset, opts: ValidateOptions = {}): voi
   GoogleTypeSchema.parse(ds.googleType);
   GoogleDimBucketSchema.parse(ds.googleCmp ?? {});
 
+  // 1.5) metaAd 键约定：键=广告名（dims.adList 成员）。v4 reorc 源按广告名入桶，前端按
+  //      adList[i][0] 取数；曾因 v2 下标键遗留约定错配导致 m4 下钻态 Top 素材全空，断言防回归
+  const adNames = new Set(ds.dims.adList.map((a) => a[0]));
+  for (const k of Object.keys(ds.metaAd)) {
+    if (!adNames.has(k)) {
+      throw new Error(`metaAd 键约定失败："${k.slice(0, 80)}" 不在 dims.adList 广告名集合中（键必须为广告名）`);
+    }
+  }
+
   // 2) 非负断言
   assertNonNegative('channel.meta', ds.channel.meta);
   assertNonNegative('channel.google', ds.channel.google);

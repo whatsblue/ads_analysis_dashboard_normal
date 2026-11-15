@@ -31,7 +31,7 @@ metaCamp     广告系列×日
 metaSpu      SPU×日
 metaDim      { ctry, age }
 metaCreative { sub, sub2, ctype }
-metaAd       广告×日（键=adList 下标字符串）
+metaAd       广告×日（键=广告名，即 dims.adList[i][0]）
 googleAcc    账号×日
 googleDim    { ctry, age }
 googleSpu    SPU×日
@@ -100,7 +100,7 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
   "countries": ["United States", "..."],        // 85 国，键为英文国名
   "ages": ["18-24", "25-34", "35-44", "45-54", "55-64", "65+", "Unknown"],
   "combos": [["demandgen", "no brand"], ["search", "brand"], "..."],  // Google 广告类型×品牌
-  "adList": [ ["广告名", "素材类型", "素材编号code"], ... ]          // Top3000，索引即 meta/ad.json 的键
+  "adList": [ ["广告名", "素材类型", "素材编号code"], ... ]          // 全量去重广告（v4 实测 3.1 万+），[0]=广告名即 meta/ad.json 的键
 }
 ```
 
@@ -143,11 +143,11 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 {
   "sub":  { 素材类型: { 子分类(如 KOL/非KOL): { 日期: {站点: MetaCell} } } },
   "sub2": { 素材类型: { 新旧(新素材/老素材):   { 日期: {站点: MetaCell} } } },
-  "ctype": { 大写类型(如 SEARCH): { 日期: {站点|A: MetaCell} } }
+  "ctype": { 规范类型名(视频广告/图片广告/红人素材/目录广告；VIDEO→视频广告、IMAGE→图片广告 入桶时规范化): { 日期: {站点|A: MetaCell} } }
 }
 ```
 
-**meta/ad.json**：`{ 序号字符串: { 日期: {站点|A: MetaCell} } }`（序号 = dims.adList 数组下标）
+**meta/ad.json**：`{ 广告名: { 日期: {站点|A: MetaCell} } }`（键 = dims.adList[i][0] 广告名；validate 按名字集合断言）
 
 **google/acc.json**：`{ 账号: { 日期: GoogleCell } }`（7 元含 inter）；**google/spu.json**、channel.google、google/type.json 同构（7 元）
 **google/dim.json**：`{ "ctry": {国家: {日期: GoogleCtyCell}}, "age": {年龄段: {日期: GoogleCell}} }`（age 恒 6 元）

@@ -123,6 +123,23 @@ export function rdToDataset(rd: RD): RawDataset {
 
   const googleType: GoogleTypeData = { typeBrand: rd.gc, cmpNames };
 
+  // v4 键约定统一：metaAd 键=广告名（dims.adList[i][0]）。原型 RD.ad 迁移期为 adList 下标字符串键，
+  // 此处映射为广告名；已是广告名（或未知键）原样保留（validate 按 adList 名字集合断言）
+  const adNames = rd.adList.map((a) => a[0]);
+  const nameSet = new Set(adNames);
+  const metaAd: RawDataset['metaAd'] = {};
+  for (const [k, v] of Object.entries(rd.ad)) {
+    if (!nameSet.has(k)) {
+      const i = Number(k);
+      const mapped = Number.isInteger(i) ? adNames[i] : undefined;
+      if (mapped) {
+        metaAd[mapped] = v;
+        continue;
+      }
+    }
+    metaAd[k] = v;
+  }
+
   return {
     manifest,
     dims,
@@ -132,7 +149,7 @@ export function rdToDataset(rd: RD): RawDataset {
     metaSpu: rd.spu,
     metaDim,
     metaCreative,
-    metaAd: rd.ad,
+    metaAd,
     googleAcc: rd.gacc,
     googleDim,
     googleSpu: rd.gspu,

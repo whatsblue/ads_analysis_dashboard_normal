@@ -505,9 +505,10 @@ export const useDataStore = defineStore('data', () => {
 
   /* ================= 素材效率（m4） ================= */
 
-  /** ad 级日取数（adList 索引；账号筛选不适用：ad 表无账号维） */
+  /** ad 级日取数（metaAd 桶键=广告名 dims.adList[i][0]；账号筛选不适用：ad 表无账号维） */
   function adMetrics(i: number, date: string): Metrics | null {
-    return metaDayOf(metaAdB?.[String(i)], date);
+    const name = adList.value[i]?.[0];
+    return name ? metaDayOf(metaAdB?.[name], date) : null;
   }
 
   function adAgg(i: number, s: string, e: string): Metrics {
