@@ -5,7 +5,7 @@
  */
 import { computed, ref, watch } from 'vue';
 import { cmpAuto, type CmpRange } from '@ads/shared';
-import { useFilterStore, type CmpType } from '@/stores/filter';
+import { useFilterStore, type CmpEdits, type CmpType } from '@/stores/filter';
 import CalendarPicker from './CalendarPicker.vue';
 
 const props = defineProps<{ open: boolean }>();
@@ -16,13 +16,29 @@ const d = filter.draft;
 
 const openIx = ref(-1); // 展开日历的周期下标
 
+/* 打开时快照已生效环比配置；✕/遮罩关闭回滚未保存编辑（原型 closeCmpModal 语义：编辑不写回，重开从生效值重置）2026-11-15 走查定版 */
+let snap: { cmpT: CmpType; cmpN: number; cmpEd: CmpEdits | null } | null = null;
+
 watch(
   () => props.open,
   (o) => {
     /* 打开弹窗即展开第一个周期日历（自定义周期需手动改日期，免多一次点击；2026-11-14 用户定版） */
-    if (o) openIx.value = d.cmpT === 'custom' ? 0 : -1;
+    if (o) {
+      snap = { cmpT: d.cmpT, cmpN: d.cmpN, cmpEd: d.cmpEd ? d.cmpEd.map((r) => (r ? { start: r.start, end: r.end } : null)) : null };
+      openIx.value = d.cmpT === 'custom' ? 0 : -1;
+    }
   },
 );
+
+function close(): void {
+  if (snap) {
+    d.cmpT = snap.cmpT;
+    d.cmpN = snap.cmpN;
+    d.cmpEd = snap.cmpEd ? snap.cmpEd.map((r) => (r ? { start: r.start, end: r.end } : null)) : null;
+    snap = null;
+  }
+  emit('close');
+}
 
 const TYPES: { v: CmpType; label: string }[] = [
   { v: 'week', label: '上周同期' },
@@ -63,15 +79,16 @@ function save(): void {
   // 仅自定义类型保留手动编辑（对齐原型 readCmpEd）
   if (d.cmpT !== 'custom') d.cmpEd = null;
   d.cmpOn = true;
+  snap = null;
   emit('close');
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="props.open" class="modal-mask on" @click.self="emit('close')">
+    <div v-if="props.open" class="modal-mask on" @click.self="close()">
       <div class="modal cmp-modal">
-        <button class="x" @click="emit('close')">✕</button>
+        <button class="x" @click="close()">✕</button>
         <h3>环比设置</h3>
         <div class="cmp-hint">选择环比类型与周期数；自定义周期的时间范围可修改（不强制等长）</div>
         <div class="cmpo-row">

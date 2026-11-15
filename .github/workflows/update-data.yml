@@ -1,7 +1,7 @@
 name: Update Data
 
 # 数据自动更新：T+1 北京时间 05:00（UTC 21:00）→ v3 月度分片全量重生成 → commit → 部署。
-# 全量（REORC_START 默认 2026-01-01 起）幂等重生成：历史月份迟到回传自然收敛，
+# 全量（REORC_START 默认 2025-01-01 起，含 2025 历史年）幂等重生成：历史月份迟到回传自然收敛，
 # 月分片 months/<YYYY-MM>.json 前端按需加载。
 # 依赖 Secrets：REORC_TOKEN（必需）/ REORC_BASE_URL（可选，默认 api.cn.reorc.cloud）
 # 见 docs/SECRETS.md
@@ -23,7 +23,7 @@ on:
         type: string
         default: ''
       start:
-        description: '月度回填起点（默认 2026-01-01；临时验证可改窄）'
+        description: '月度回填起点（默认 2025-01-01；临时验证可改窄）'
         type: string
         default: ''
       end:
@@ -45,7 +45,7 @@ jobs:
   update:
     name: 拉数 + 校验 + 提交
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       # pnpm 12 供应链新政：lockfile 已冻结版本，豁免发布年龄拦截保 CI 稳定
       npm_config_minimum_release_age: '0'
@@ -73,10 +73,11 @@ jobs:
           # 取数目标：selectdb 连接的 data_warehouse_prod（广告聚合层），SQL 内仍带 schema 前缀双保险
           REORC_CONNECTION_NAME: selectdb
           REORC_DATABASE: data_warehouse_prod
-          # v3 月度分片：REORC_START~REORC_END 按自然月逐月拉取（空值时 cli 默认 2026-01-01~北京昨日）
+          # v3 月度分片：REORC_START~REORC_END 按自然月逐月拉取；schedule 触发时 inputs 为空，
+          # 此处 fallback 2025-01-01（覆盖 2025 历史年，cli 内部默认 2026-01-01 不再生效）
           PIPELINE_MODE: monthly
           PIPELINE_PROBE: ${{ inputs.probe }}
-          REORC_START: ${{ inputs.start }}
+          REORC_START: ${{ inputs.start || '2025-01-01' }}
           REORC_END: ${{ inputs.end }}
           REORC_PROBE_SQL: ${{ inputs.probe_sql }}
           REORC_PROBE_CONN: ${{ inputs.probe_conn }}

@@ -142,6 +142,10 @@ function apply(): void {
 function reset(): void {
   const m = data.manifest;
   if (m) filter.reset(m.range.viewStart, m.range.viewEnd);
+  /* 对齐原型 btnReset=location.reload：账号面板活跃渠道/搜索一并回初始（否则大盘空文案残留「Meta 账号」） 2026-11-15 走查定版 */
+  accActive.value = '';
+  accCur.value = 'meta';
+  accQ.value = '';
   filter.apply();
 }
 
