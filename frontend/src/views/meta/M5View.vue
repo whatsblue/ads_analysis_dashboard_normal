@@ -43,7 +43,7 @@ function onEsc(e: KeyboardEvent): void {
 
 /* ================= 趋势对比（原型 renderM5T；2026-11-14 用户定版：去卡头粒度切换固定按日，指标支持多选多线） ================= */
 
-const trendMs = ref<string[]>(['spend']);
+const trendMs = ref<string[]>(['spend', 'roas']);
 const trendA = ref('United States');
 const trendB = ref('非美国');
 const ddOpen = ref<'' | 'm' | 'a' | 'b'>('');
@@ -70,7 +70,7 @@ const trendTitle = computed(() => (metDefs.value.length ? metDefs.value.map((m) 
 
 const metricBtnText = computed(() => {
   const names = metDefs.value.map((m) => m.name);
-  return names.length ? names.join(',') : '选择指标';
+  return names.length ? names.join(',') : '任选2项';
 });
 
 /** 指标多选 toggle（点击不关面板，外点关闭）；上限 2（满 2 项再点替换最早选中，保持先点=柱），至少保留一项 */
@@ -226,7 +226,7 @@ const ctyRows = computed<TableRow[]>(() => {
       <div class="card-h">
         <span>{{ trendTitle }}</span>
         <span style="display: flex; gap: 6px; align-items: center; font-weight: 400">
-          <span class="dd"><button @click.stop="ddOpen = ddOpen === 'm' ? '' : 'm'">{{ metricBtnText }}</button>
+          <span class="dd"><button @click.stop="ddOpen = ddOpen === 'm' ? '' : 'm'">{{ metricBtnText }}<span style="color: var(--sub); font-weight: 400; margin-left: 5px; font-size: 12px">任选2项</span></button>
             <div v-if="ddOpen === 'm'" class="dd-panel cty-panel" @click.stop>
               <div v-for="m in CTY_TREND_METRICS" :key="m.k" class="cty-opt" :class="{ on: trendMs.includes(m.k) }" @click="toggleMetric(m.k)">{{ m.name }}</div>
             </div></span>
