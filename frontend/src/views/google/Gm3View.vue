@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * Google · 商品投产（原型 renderGm3）：SPU 排行默认 Top6；
+ * Google · 商品投产（原型 renderGm3）：SPU 排行全量进表（初始 Top10，加载更多展开全部；
+ * 2026-11-16 业务更新，原默认 Top6 改为与 Meta 商品投产一致）；
  * 订单/转化价值取平台口径（G_SPU_COLS，std derive，桶位 value=vs）。
  */
 import { computed, onMounted, ref } from 'vue';
@@ -35,7 +36,7 @@ const spuRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const s = filter.applied.start;
   const e = filter.applied.end;
-  const keys = pickKeys(spuSel.value, spuExcl.value, data.gSpus) || spuTop.value.slice(0, 6);
+  const keys = pickKeys(spuSel.value, spuExcl.value, data.gSpus) || spuTop.value;
   const rows = keys.map((k) => ({ label: k, m: data.gSpuRange(k, s, e) }));
   return withCmps(rows, (r, _i, rg) => data.gSpuRange(r.label, rg.start, rg.end));
 });
