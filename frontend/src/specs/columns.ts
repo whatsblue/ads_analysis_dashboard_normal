@@ -255,7 +255,7 @@ export const SUB_DEFS: SubDef[] = [
     t1: '视频是否AI分类明细',
     typeName: '视频广告',
     order: ['AI', '非AI'],
-    alt: { title: '视频素材新旧分类明细', order: ['新素材', '复刻素材'] },
+    alt: { title: '视频素材新旧分类明细', order: ['新素材', '复刻素材', '其他'] }, // 2026-11-16 视频同图片对称补其他行（无法归新/复刻的子分类）
   },
   {
     key: 'xph',
