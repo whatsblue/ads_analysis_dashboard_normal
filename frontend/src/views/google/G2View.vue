@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * Google · 国家维度（原型 renderG2）：默认花费 Top5；国家名纯文本（2026-11-04 定版）。
+ * Google · 国家维度（原型 renderG2）：国家对比明细全量进表（初始 Top10 加载更多；2026-11-16 业务更新，
+ * 原默认花费 Top5）；国家名纯文本（2026-11-04 定版）。
  */
 import { computed, onMounted, ref } from 'vue';
 import { useDataStore } from '@/stores/data';
@@ -48,7 +49,7 @@ const ctyRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const s = filter.applied.start;
   const e = filter.applied.end;
-  const keys = pickKeys(ctySel.value, ctyExcl.value, data.countries) || ctyTop5.value;
+  const keys = pickKeys(ctySel.value, ctyExcl.value, data.countries) || ctyItems.value;
   const rows = keys.map((ct) => ({ label: ct, m: data.gCtyRange(ct, s, e) }));
   rows.sort((x, y) => y.m.spend - x.m.spend);
   return withCmps(rows, (r, _i, rg) => data.gCtyRange(r.label, rg.start, rg.end));

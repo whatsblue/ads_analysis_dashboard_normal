@@ -192,7 +192,7 @@ const usRows = computed<TableRow[]>(() => {
   });
 });
 
-/* ================= 国家对比明细（默认花费 Top5） ================= */
+/* ================= 国家对比明细（全量进表，初始 Top10 加载更多；2026-11-16 业务更新，原默认 Top5） ================= */
 
 const ctySel = ref<string[]>([]);
 const ctyExcl = ref(false);
@@ -212,7 +212,7 @@ const ctyRows = computed<TableRow[]>(() => {
   const top = Object.keys(a)
     .filter((k) => a[k].spend > 0)
     .sort((x, y) => a[y].spend - a[x].spend);
-  const keys = pickKeys(ctySel.value, ctyExcl.value, data.countries) || top.slice(0, 5);
+  const keys = pickKeys(ctySel.value, ctyExcl.value, data.countries) || top;
   const rows = keys.map((k) => ({ label: k, m: a[k] || zero() }));
   return withCmps(rows, (r, _i, rg) => data.metaDimRange('ctry', rg.start, rg.end)[r.label] ?? zero());
 });
