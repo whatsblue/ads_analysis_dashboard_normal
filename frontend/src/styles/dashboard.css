@@ -846,6 +846,9 @@ table.matrix {
   top: calc(var(--gtrH, 30px) - 12px);
   z-index: 6;
 }
+.tbl-scroll .matrix thead tr.gtr th:first-child {
+  z-index: 9; /* corner 占位须压住同层 z7 的分组 th：否则横向滚动时分组标题滑入左侧 pinned 区盖在空白上方（2026-11-16） */
+}
 .tbl-scroll .matrix thead th:first-child {
   z-index: 8;
 }
