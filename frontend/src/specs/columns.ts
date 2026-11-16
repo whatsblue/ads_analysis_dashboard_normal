@@ -74,8 +74,8 @@ export const PCT_COLS = {
   value_pct: { k: 'value_pct', name: '转化价值占比', fmt: fmtPct },
 } as const satisfies Record<string, ColDef>;
 
-/** 默认勾选「显示占比」的表（其余默认关闭） */
-export const PCT_DEF: Record<string, 1> = { m2a: 1, m5: 1, m5b: 1 };
+/** 「显示占比」默认全不勾选（用户 2026-11-16 要求；机制保留，勾选状态仍跨页签持久） */
+export const PCT_DEF: Record<string, 1> = {};
 
 /** 在锚点列后插入一列 */
 function insertAfter(base: ColDef[], anchor: string, extra: ColDef): ColDef[] {
