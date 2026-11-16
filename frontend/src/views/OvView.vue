@@ -2,7 +2,7 @@
 /**
  * 大盘总览（原型 renderOv/renderOvT/renderCa/ovExport）：
  * 总览矩阵（整站 GMV=易仓）+ 花费&ROAS 趋势（Meta/Google 并排柱+ROAS 虚线）
- * + 渠道花费占比/ROAS 对比 + 渠道对比明细表（Google atc/ckt=0、hover 归因）。
+ * + 渠道花费占比/ROAS 对比 + 渠道对比明细表（Google atc/ckt=0、hover 归因；EDM 不入对比明细与总计）。
  */
 import { computed, onMounted, ref } from 'vue';
 import { dateRange, derive, esc, fmtMoney, fmtPct, fmtRoas, type Metrics } from '@ads/shared';
@@ -140,7 +140,8 @@ const caRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const s = filter.applied.start;
   const e = filter.applied.end;
-  const rows: (TableRow & { ch: string })[] = (['Meta', 'Google', 'EDM'] as const).map((ch) => ({
+  // EDM 不参与渠道对比明细（总计/占比分母随之不含 EDM；EDM 仅保留在大盘总览矩阵）
+  const rows: (TableRow & { ch: string })[] = (['Meta', 'Google'] as const).map((ch) => ({
     ch,
     label: ch,
     m: chM(ch, s, e),
