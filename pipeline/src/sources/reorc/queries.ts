@@ -202,6 +202,16 @@ FROM data_warehouse_prod.ads_marketing_campaign_daily
 WHERE platform = 'google' AND sales_platform = 'shopify' AND campaign_id IS NOT NULL AND TRIM(campaign_id) != ''LIMIT 100000`,
   },
   {
+    id: 'google_camp',
+    desc: 'Google 系列×日（gm2 Campaign 明细；shopify 站点口径，桶键=系列名无账号维不缩放；2026-11-16 补齐：reorc 通道此前未接入致 Campaign 明细全 0，结构同 rdfile 通道 gcmp）',
+    sql: (p) => `SELECT f.dt AS date, f.campaign_name AS campaign, ${GOOGLE_MEASURE}
+FROM data_warehouse_prod.ads_marketing_campaign_daily f
+WHERE f.${GOOGLE_FILTER} AND f.campaign_name IS NOT NULL AND TRIM(f.campaign_name) != ''
+GROUP BY f.dt, f.campaign_name
+`
+      .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
+  },
+  {
     id: 'google_spu',
     desc: 'Google SPU×日（gm3；shopify 站点口径；Ads 后台平台口径 GOOGLE_SPU_MEASURE，订单/转化价值不随归因断供缺数）',
     sql: (p) => `SELECT dt AS date, spu AS spu, ${GOOGLE_SPU_MEASURE}

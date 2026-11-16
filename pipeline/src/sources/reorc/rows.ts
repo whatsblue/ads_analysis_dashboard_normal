@@ -120,6 +120,7 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
   const googleDim: RawDataset['googleDim'] = { ctry: {}, age: {} };
   const googleSpu: RawDataset['googleSpu'] = {};
   const googleType: RawDataset['googleType'] = { typeBrand: {}, cmpNames: {} };
+  const googleCmp: NonNullable<RawDataset['googleCmp']> = {};
 
   // 维度枚举（保序 distinct）
   const seen = {
@@ -213,6 +214,13 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     googleType.cmpNames[str(row.campaign_id)] = str(row.campaign_name);
     seen.gCampaigns.add(str(row.campaign_name));
   }
+  for (const row of rows.google_camp ?? []) {
+    const cp = str(row.campaign);
+    seen.gCampaigns.add(cp);
+    const b = googleBucketOf(googleCmp, cp);
+    const date = dateStr(row.date, 'google_camp');
+    b[date] = addInto(b[date], googleCell7(row)) as GoogleCell;
+  }
   for (const row of rows.google_spu ?? []) {
     const spu = str(row.spu);
     seen.gSpus.add(spu);
@@ -296,5 +304,6 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     googleDim,
     googleSpu,
     googleType,
+    googleCmp,
   };
 }

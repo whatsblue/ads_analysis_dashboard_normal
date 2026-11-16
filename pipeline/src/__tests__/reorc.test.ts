@@ -72,9 +72,9 @@ describe('reorc client', () => {
 });
 
 describe('reorc queries 模板', () => {
-  it('19 个主题且 id 唯一', () => {
-    expect(REORC_QUERIES).toHaveLength(19);
-    expect(new Set(REORC_TOPIC_IDS).size).toBe(19);
+  it('20 个主题且 id 唯一', () => {
+    expect(REORC_QUERIES).toHaveLength(20);
+    expect(new Set(REORC_TOPIC_IDS).size).toBe(20);
     expect(REORC_TOPIC_IDS).toContain('meta_channel');
     expect(REORC_TOPIC_IDS).toContain('google_ctry');
   });
