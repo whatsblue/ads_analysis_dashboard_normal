@@ -6,7 +6,7 @@
  *   - data_warehouse_prod.ads_marketing_spu_daily          商品×日（spu 字段直接可用）
  *   - data_warehouse_prod.ads_marketing_creative_by_ad_daily  广告×日（ad_name/creative_type/creative_code）
  *   - belle_oversea.dim_facebook_ad_info_mapping_current   Meta 广告维表（material_type/kol_name/created_time）
- *   - belle_oversea.ads_ec_mul_platform_sales_daily        易仓已付款订单日汇总（整站 GMV 口径）
+ *   - data_warehouse_prod.ods_eccang_order                 易仓订单明细 status=4 已付款（整站 GMV 口径，对齐观远 BI 2026-11-16；原聚合表 ads_ec_mul_platform_sales_daily 含非已付款态重复订单致 GMV 高估约 2.6%，弃用）
  *   - data_warehouse_prod.ods_edm_ads_shopify_marketing_attribution_daily  Shopify EDM 营销归因日销售（utm=Klaviyo+CartSee，2025-01 起全历史；2026-11-15 切换：原 edmreport_d 仅 2026-09 起有数致 1-8 月 EDM 缺失）
  *
  * 口径映射：clicks=platform_link_clicks（链接点击，CVR 分子）、inter=platform_clicks（全部点击）；
@@ -237,11 +237,11 @@ GROUP BY dt, age_group`
   },
   {
     id: 'gmv',
-    desc: '整站 GMV（易仓已付款订单日汇总表，按付款日期；cnt=qty 件数近似）',
-    sql: (p) => `SELECT platform_paid_date AS date, LOWER(platform) AS site, SUM(sale_usd) AS amount, SUM(qty) AS cnt
-FROM belle_oversea.ads_ec_mul_platform_sales_daily
-WHERE platform_paid_date BETWEEN '{{START}}' AND '{{END}}'
-GROUP BY platform_paid_date, LOWER(platform)`
+    desc: '整站 GMV（易仓订单明细 status=4 已付款，按付款日期；与观远 BI 大盘总览逐位一致，2026-11-16 对账定版）',
+    sql: (p) => `SELECT DATE_FORMAT(platform_paid_date, '%Y-%m-%d') AS date, LOWER(platform) AS site, SUM(CAST(amountpaid AS DOUBLE)) AS amount, SUM(product_count) AS cnt
+FROM data_warehouse_prod.ods_eccang_order
+WHERE status = 4 AND platform_paid_date >= '{{START}}' AND platform_paid_date < DATE_ADD('{{END}}', INTERVAL 1 DAY)
+GROUP BY DATE_FORMAT(platform_paid_date, '%Y-%m-%d'), LOWER(platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
