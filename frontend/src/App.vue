@@ -67,11 +67,6 @@ const activeLv2 = computed<Lv2Def | null>(() => (activeLv1.value === 'meta' || a
 const activeTab = computed(() => (route.name && typeof route.name === 'string' && route.name !== 'overview' ? route.name : ''));
 
 const genAt = computed(() => data.manifest?.genAt ?? '…');
-/* 口径弹窗接入范围（原型 calRangeTxt = range.min ~ range.max） */
-const calRangeTxt = computed(() => {
-  const r = data.manifest?.range;
-  return r ? r.min + ' ~ ' + r.max : '';
-});
 const calOpen = ref(false);
 
 /* 切页签滚回该页顶部（原型单页 setTab 无此问题，SPA 路由保留滚动位需显式归零） */
@@ -148,13 +143,12 @@ onMounted(async () => {
       <button class="x" type="button" @click="calOpen = false">✕</button>
       <h3>口径说明</h3>
       <ul>
-        <li><b>数据说明</b>：本看板覆盖 Meta、Google 广告数据；日业务数据通常在 T+1 05:00 前同步到看板，并滚动更新最近 10 个自然日。</li>
-        <li><b>范围</b>：Meta×(Shopify+Shoplazza) + Google×Shopify；当前接入 {{ calRangeTxt }}</li>
+        <li><b>数据说明</b>：本看板覆盖 Meta、Google 广告数据；T日业务数据通常在 T+1 05:00 前同步到看板，并滚动更新最近 10 个自然日。</li>
+        <li><b>范围</b>：Meta×(Shopify+Shoplazza) + Google×Shopify；当前覆盖接入 2025-01-01至今。</li>
         <li><b>筛选</b>：「大盘」联动日期范围和销售站点；账号筛选不影响该卡片。</li>
-        <li><b>口径</b>：主看板 CVR = 订单数 / 统一交互数；Google 深度分析按字段名区分 google / shopify / 归因口径。</li>
+        <li><b>口径</b>：主看板 CVR = 订单数 / 统一交互数；Google 渠道分析按字段名区分 google / shopify / 归因口径。</li>
         <li><b>Meta 数据口径</b>：前端修改归因将不会联动该看板数据；看板数据来源为 Meta 导出报告，与 Meta 前端显示存在平台自身差异，核对时请以导出报告为准。</li>
         <li><b>Meta 国家/年龄细分</b>：Meta 平台对分维度数据有内部取整，国家、年龄模块与 Meta 前端可能有个位数级别出入，不影响汇总数据准确性。</li>
-        <li><b>整站 GMV 收敛</b>：整站 GMV 取易仓已付款订单（status=4）按下单日期统计；历史月份订单的付款/状态在次月仍会延迟回填，看板为每日 T+1 快照，历史区间数值可能略低于实时数仓并随每日同步逐日收敛，精确对账以数仓实时查询为准。</li>
       </ul>
     </div>
   </div>
