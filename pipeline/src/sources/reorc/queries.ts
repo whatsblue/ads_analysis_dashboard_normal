@@ -64,18 +64,18 @@ const GOOGLE_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) A
 const GOOGLE_SPU_MEASURE = `SUM(platform_cost) AS spend, SUM(platform_impressions) AS impressions, SUM(platform_clicks) AS clicks,
        SUM(platform_orders) AS orders, SUM(platform_conversion_value) AS vs, SUM(platform_conversion_value) AS va, SUM(unified_interactions) AS inter`;
 
-/** 素材子分类桶键规则（对齐原型 RD.sub 抽取侧：按广告名关键词拆分，与 adCodeOf 同款编码正则）：
- *  type 层：XSP 编码→视频广告、XPH 编码→图片广告、其余→红人素材（红人桶=全员，含不含 KOL 归「其他」行，合计=素材类型明细） */
-const SUB_TYPE = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' THEN '视频广告'
-       WHEN f.ad_name REGEXP '[Xx][Pp][Hh][0-9]{3,}' THEN '图片广告' ELSE '红人素材' END`;
-/** 子分类层：编码素材按 AI 关键词；红人素材桶按 KOL×图片/视频（原型 SUB_DEFS.kol.split） */
-const SUB_SUB = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' OR f.ad_name REGEXP '[Xx][Pp][Hh][0-9]{3,}'
+/** 素材子分类桶键规则（2026-11-16 对齐 ctype 口径：type 层按 creative_type 分类，与素材类型明细一致；
+ *  旧版按广告名 XSP/XPH 编码拆分，会把目录广告/unknown 等非编码广告全归红人素材，致子分类表总计≠素材类型明细行） */
+const SUB_TYPE = `CASE WHEN f.creative_type LIKE '%视频%' THEN '视频广告'
+       WHEN f.creative_type LIKE '%图片%' THEN '图片广告' ELSE COALESCE(NULLIF(TRIM(f.creative_type), ''), '红人素材') END`;
+/** 子分类层：视频/图片桶按 AI 关键词；红人素材桶按 KOL×图片/视频（原型 SUB_DEFS.kol.split） */
+const SUB_SUB = `CASE WHEN f.creative_type LIKE '%视频%' OR f.creative_type LIKE '%图片%'
        THEN CASE WHEN f.ad_name LIKE '%AI%' THEN 'AI' ELSE '非AI' END
        WHEN f.ad_name NOT LIKE '%KOL%' THEN '其他' WHEN f.ad_name LIKE '%图片%' THEN '图片'
        WHEN f.ad_name LIKE '%视频%' THEN '视频' ELSE '其他' END`;
 /** 新旧/付费分类层（原型 alt.split 定版）：视频含 NEW=新/否则复刻；图片含 XMB=新/FK=复刻/其余其他；红人含「付费」=付费红人 */
-const SUB_SUB2 = `CASE WHEN f.ad_name REGEXP '[Xx][Ss][Pp][0-9]{3,}' THEN CASE WHEN f.ad_name LIKE '%NEW%' THEN '新素材' ELSE '复刻素材' END
-       WHEN f.ad_name REGEXP '[Xx][Pp][Hh][0-9]{3,}' THEN CASE WHEN f.ad_name LIKE '%XMB%' THEN '新素材'
+const SUB_SUB2 = `CASE WHEN f.creative_type LIKE '%视频%' THEN CASE WHEN f.ad_name LIKE '%NEW%' THEN '新素材' ELSE '复刻素材' END
+       WHEN f.creative_type LIKE '%图片%' THEN CASE WHEN f.ad_name LIKE '%XMB%' THEN '新素材'
        WHEN f.ad_name LIKE '%FK%' THEN '复刻素材' ELSE '其他' END
        WHEN f.ad_name LIKE '%付费%' THEN '付费红人' ELSE '非付费红人' END`;
 /** 创意格式中文 → IMAGE/VIDEO（原型 ctype 口径） */

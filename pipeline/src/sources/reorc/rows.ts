@@ -187,7 +187,7 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
   }
   for (const row of rows.meta_ctype ?? []) {
     const ctype = ctypeKey(str(row.ctype));
-    if (!/^unknown$/i.test(ctype)) seen.types.add(ctype);
+    seen.types.add(ctype); /* unknown 入枚举：观远 BI 素材类型含 unknown 行（2026-11-16 对齐），m4 三组件以枚举驱动 */
     putMetaDay(metaDayOf(metaCreative.ctype, ctype, dateStr(row.date, 'meta_ctype')), siteKey(row.site), metaCell(row));
   }
   for (const row of rows.meta_ad ?? []) {
