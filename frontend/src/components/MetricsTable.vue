@@ -1,3 +1,8 @@
+<script lang="ts">
+/* 占比开关跨路由持久：须挂模块作用域（script setup 顶层为每实例作用域，路由切换组件销毁时 Map 会一并丢失） */
+const PCT_STATE = new Map<string, boolean>();
+</script>
+
 <script setup lang="ts">
 /**
  * 通用指标表（迁移自原型 regTable/drawTable，全站唯一表格实现）：
@@ -100,8 +105,7 @@ const emit = defineEmits<{ link: [label: string] }>();
 
 const slots = useSlots();
 
-/** 占比开关跨页保留（原型 tables[id].pctOn 全局持久：页签切换/筛选重渲染不丢勾选，路由重建也不重置） */
-const PCT_STATE = new Map<string, boolean>();
+/* PCT_STATE 定义见上方模块级 <script> 块（原型 tables[id].pctOn 全局持久：页签切换/路由重建不重置） */
 
 const filter = useFilterStore();
 
