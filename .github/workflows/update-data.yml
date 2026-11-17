@@ -1,13 +1,18 @@
 name: Update Data
 
-# 数据自动更新：T+1 北京时间 05:00（UTC 21:00）→ v3 月度分片全量重生成 → commit → 部署。
+# 数据自动更新：每日双批次（北京时间 05:00 主批次 + 21:00 晚间收敛批次）→ v3 月度分片全量重生成 → commit → 部署。
+# 数仓 T+1 05:00 同步完成后立即拉取；晚间批次收敛白天迟到回传（易仓 status=4 延迟回填、广告平台回传修正），
+# 保证白天任意时段打开看板与 BI 实时数据的偏差不超过半天。
 # 全量（REORC_START 默认 2025-01-01 起，含 2025 历史年）幂等重生成：历史月份迟到回传自然收敛，
 # 月分片 months/<YYYY-MM>.json 前端按需加载。
 # 依赖 Secrets：REORC_TOKEN（必需）/ REORC_BASE_URL（可选，默认 api.cn.reorc.cloud）
 # 见 docs/SECRETS.md
 on:
   schedule:
-    - cron: '0 21 * * *' # UTC 21:00 = 北京 05:00
+    - cron: '0 21 * * *' # UTC 21:00 = 北京 05:00（主批次，T+1 数据同步完成后）
+    - cron: '30 23 * * *' # UTC 23:30 = 北京 07:30（兑底：GitHub schedule 丢触发/延迟时保证 9:00 前更新；
+                          #   主批次已成功时本次 changed=false 不部署，无副作用）
+    - cron: '0 13 * * *' # UTC 13:00 = 北京 21:00（晚间批次，收敛白天迟到回传）
   workflow_dispatch:
     inputs:
       probe:
