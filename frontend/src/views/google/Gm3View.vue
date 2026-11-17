@@ -26,11 +26,15 @@ onMounted(async () => {
 const spuSel = ref<string[]>([]);
 const spuExcl = ref(false);
 
-const spuTop = computed(() =>
-  data.gSpus
-    .slice()
-    .sort((x, y) => data.gSpuRange(y, filter.applied.start, filter.applied.end).spend - data.gSpuRange(x, filter.applied.start, filter.applied.end).spend),
-);
+/** SPU 榜单与下拉仅列当前筛选范围内有投放（花费>0）的 SPU——全历史宇宙含大量已停投 SPU 的全 0 行（2026-11-17 业务更新，对齐 M3View/G2View/M5View）；用户显式选择的集合不受此限 */
+const spuTop = computed(() => {
+  void filter.applied.version;
+  const s = filter.applied.start;
+  const e = filter.applied.end;
+  return data.gSpus
+    .filter((k) => data.gSpuRange(k, s, e).spend > 0)
+    .sort((x, y) => data.gSpuRange(y, s, e).spend - data.gSpuRange(x, s, e).spend);
+});
 
 const spuRows = computed<TableRow[]>(() => {
   void filter.applied.version;
@@ -47,7 +51,7 @@ const spuRows = computed<TableRow[]>(() => {
     <div class="ptitle">
       <h2>◎ 商品投产</h2>
       <span class="frow">
-        <MultiDropdown all-name="SPU" :items="data.gSpus" :selected="spuSel" :excl="spuExcl" clearable @change="(sel, ex) => { spuSel = sel; spuExcl = ex; }" />
+        <MultiDropdown all-name="SPU" :items="spuTop" :selected="spuSel" :excl="spuExcl" clearable @change="(sel, ex) => { spuSel = sel; spuExcl = ex; }" />
       </span>
     </div>
 
