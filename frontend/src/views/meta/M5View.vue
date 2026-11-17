@@ -25,7 +25,7 @@ const ready = ref(false);
 onMounted(async () => {
   await data.init();
   await data.ensure('metaDim');
-  trendA.value = data.usKey;
+  /* 默认地区 AE/SA 已在 ref 初始化时定版（2026-11-17），不再随挂载重置回 US */
   ready.value = true;
   document.addEventListener('click', closeDd);
   document.addEventListener('keydown', onEsc);
