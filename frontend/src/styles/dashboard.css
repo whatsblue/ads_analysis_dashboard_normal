@@ -860,6 +860,28 @@ table.matrix {
   padding-left: 6px;
   padding-right: 6px;
 }
+/* ---------- 双冻结（stk2）：首列+第二列同时 sticky（Campaign 明细 ID+名称，2026-11-17）----------
+   第二列 left=首列实际宽（MetricsTable 挂载测量注入 --col1w）；行背景随行类对齐避免横滚时露白 */
+.stk2 .matrix thead tr:not(.gtr) th:nth-child(2),
+.stk2 .matrix tbody td:nth-child(2) {
+  position: sticky;
+  left: var(--col1w, 150px);
+  z-index: 3;
+  background: #fff;
+  box-shadow: 2px 0 0 var(--line);
+}
+.stk2 .matrix thead tr:not(.gtr) th:nth-child(2) {
+  z-index: 9;
+}
+.stk2 .matrix tr.cmp-d td:nth-child(2) {
+  background: #f6f9ff;
+}
+.stk2 .matrix tr.cmp-delta td:nth-child(2) {
+  background: #fbfcff;
+}
+.stk2 .matrix tr.tbl-total td:nth-child(2) {
+  background: #f7f9fc;
+}
 .matrix td:first-child {
   background: #fff;
 }

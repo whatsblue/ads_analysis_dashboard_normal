@@ -77,6 +77,8 @@ const props = withDefaults(
     attrOn?: boolean;
     /** 单环比周期时压缩列距适配视口宽（总计行免横向滚动完整可见）；多周期保留滑块（2026-11-17 m4a） */
     fitCols?: boolean;
+    /** 双冻结：首列+第二列（pre[0]）同时 sticky（Campaign 明细 ID+名称，2026-11-17） */
+    sticky2?: boolean;
   }>(),
   {
     mode: 'std',
@@ -101,6 +103,7 @@ const props = withDefaults(
     dayFn: null,
     attrOn: false,
     fitCols: false,
+    sticky2: false,
   },
 );
 
@@ -109,6 +112,15 @@ const emit = defineEmits<{ link: [label: string] }>();
 /* 表头页面级吸顶：挂载后测量分组行实际高度注入本表根节点 --gtrH（列名行 sticky top=--topbarH+--gtrH） */
 const tblRoot = ref<HTMLElement | null>(null);
 onMounted(() => {
+  /* stk2 双冻结：第二列 left=首列实际宽（挂载+字体就绪后测量注入 --col1w，防字体晚载偏移） */
+  const setCol1 = (): void => {
+    const c2 = tblRoot.value?.querySelector('.matrix thead tr:not(.gtr) th:nth-child(2)');
+    if (tblRoot.value && c2) tblRoot.value.style.setProperty('--col1w', String((c2 as HTMLElement).offsetLeft) + 'px');
+  };
+  if (props.sticky2) {
+    setCol1();
+    document.fonts?.ready.then(setCol1).catch(() => undefined);
+  }
   const gtr = tblRoot.value?.querySelector('.matrix thead tr.gtr');
   if (!tblRoot.value || !gtr) return;
   const setH = (): void => tblRoot.value!.style.setProperty('--gtrH', gtr.getBoundingClientRect().height + 'px');
@@ -353,7 +365,7 @@ function doExport(cfg: ExportCfg): void {
   const arr: ExpCell[][] = [names.slice()];
 
   /* 数值单元格（2026-11-17 用户定版）：指标真数值、占比/比率为 pct（xls 百分比格式）；无效值 '—' 占位 */
-  function expVal(c: { k: string }, d: Record<string, number>, m: Metrics, dens: number): ExpCell {
+  function expVal(c: { k: string }, d: Record<string, number>, m: Metrics, dens: { s: number; o: number; v: number }): ExpCell {
     if (PCT_K.includes(c.k as (typeof PCT_K)[number])) {
       const v = pctVal(c.k, m, dens);
       return v == null || isNaN(v) ? '—' : { pct: v };
@@ -473,7 +485,7 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
 
 <template>
   <!-- noCard：素材子分类单卡双表场景，嵌在外层 .card 内仅去掉卡片外壳（原型 m4sub 结构） -->
-  <div ref="tblRoot" :class="[props.noCard ? undefined : 'card', props.fitCols && cmpCount <= 1 ? 'tbl-fit' : '']">
+  <div ref="tblRoot" :class="[props.noCard ? undefined : 'card', props.fitCols && cmpCount <= 1 ? 'tbl-fit' : '', props.sticky2 ? 'stk2' : '']">
     <div class="card-h" :style="props.headStyle || undefined">
       <!-- head-pre：卡头最左（下钻返回按钮）；head-note：紧贴标题的说明（原型 m4a 注释） -->
       <slot name="head-pre"></slot>

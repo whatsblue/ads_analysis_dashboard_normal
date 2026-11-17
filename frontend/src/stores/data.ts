@@ -214,6 +214,8 @@ export const useDataStore = defineStore('data', () => {
   const gAccounts = computed(() => (dims.value?.gAccounts ?? []).filter((a) => !a.includes('Read-Only')));
   const metaCampaigns = computed(() => dims.value?.metaCampaigns ?? []);
   const gCampaigns = computed(() => dims.value?.gCampaigns ?? []);
+  /** Meta 系列 ID→名称（v5 桶键=ID 后展示/下拉 label 反查） */
+  const metaCampNames = computed(() => dims.value?.metaCampNames ?? {});
   const spus = computed(() => dims.value?.spus ?? []);
   /** SPU→投放账号映射（m3 账号联动；meta_spu 窗口行推导） */
   const spuAccs = computed(() => dims.value?.spuAccs ?? {});
@@ -469,6 +471,11 @@ export const useDataStore = defineStore('data', () => {
     return gCellOf(gCmpB?.[cp]?.[date]) ?? zero();
   }
 
+  /** Google 系列名称反查（cmpNames[id]；v5 桶键=ID 后展示/下拉 label 用，ID 缺失回退原值） */
+  function gCmpName(id: string): string {
+    return gTypeB?.cmpNames[id] || id;
+  }
+
   function gCmpRange(cp: string, s: string, e: string): Metrics {
     return memo(`gPR|${cp}|${s}|${e}`, () => {
       const m = zero();
@@ -665,7 +672,9 @@ export const useDataStore = defineStore('data', () => {
     metaAccountsOf,
     gAccounts,
     metaCampaigns,
+    metaCampNames,
     gCampaigns,
+    gCmpName,
     spus,
     spuAccs,
     gSpus,

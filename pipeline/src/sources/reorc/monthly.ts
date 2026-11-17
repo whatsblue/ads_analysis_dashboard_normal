@@ -102,11 +102,13 @@ export function mergeDims(a: Dims, b: Dims): Dims {
   for (const [spu, accs] of Object.entries(b.spuAccs)) {
     spuAccs[spu] = uniq([...(spuAccs[spu] ?? []), ...accs]);
   }
+  const metaCampNames: Record<string, string> = { ...a.metaCampNames, ...b.metaCampNames };
   return {
     metaAccounts: uniq([...a.metaAccounts, ...b.metaAccounts]),
     gAccounts: uniq([...a.gAccounts, ...b.gAccounts]),
     metaCampaigns: uniq([...a.metaCampaigns, ...b.metaCampaigns]),
     gCampaigns: uniq([...a.gCampaigns, ...b.gCampaigns]),
+    metaCampNames,
     spus: uniq([...a.spus, ...b.spus]),
     gSpus: uniq([...a.gSpus, ...b.gSpus]),
     spuAccs,

@@ -38,6 +38,7 @@ export const DimsSchema = z.object({
   gAccounts: StrArray,
   metaCampaigns: StrArray,
   gCampaigns: StrArray,
+  metaCampNames: z.record(z.string()),
   spus: StrArray,
   gSpus: StrArray,
   spuAccs: z.record(StrArray),

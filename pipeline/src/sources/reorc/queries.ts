@@ -105,11 +105,11 @@ GROUP BY dt, account, LOWER(sales_platform)`
   },
   {
     id: 'meta_camp',
-    desc: 'Meta 系列×日（m1 大盘健康度系列列表）',
-    sql: (p) => `SELECT dt AS date, campaign_name AS campaign, LOWER(sales_platform) AS site, ${META_MEASURE}
+    desc: 'Meta 系列×日（m1 大盘健康度系列列表；v5 起桶键=series campaign_id，同名不同 ID 系列不再合并，修复 Campaign 明细对不齐观远；ID 缺失回退名称）',
+    sql: (p) => `SELECT dt AS date, campaign_id AS campaign_id, campaign_name AS campaign, LOWER(sales_platform) AS site, ${META_MEASURE}
 FROM data_warehouse_prod.ads_marketing_campaign_daily
 WHERE ${META_FILTER}
-GROUP BY dt, campaign_name, LOWER(sales_platform)`
+GROUP BY dt, campaign_id, campaign_name, LOWER(sales_platform)`
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },
   {
@@ -203,11 +203,11 @@ WHERE platform = 'google' AND sales_platform = 'shopify' AND campaign_id IS NOT 
   },
   {
     id: 'google_camp',
-    desc: 'Google 系列×日（gm2 Campaign 明细；shopify 站点口径，桶键=系列名无账号维不缩放；2026-11-16 补齐：reorc 通道此前未接入致 Campaign 明细全 0，结构同 rdfile 通道 gcmp）',
-    sql: (p) => `SELECT f.dt AS date, f.campaign_name AS campaign, ${GOOGLE_MEASURE}
+    desc: 'Google 系列×日（gm2 Campaign 明细；shopify 站点口径，无账号维不缩放；v5 起桶键=platform campaign_id 同上；2026-11-16 补齐：reorc 通道此前未接入致 Campaign 明细全 0）',
+    sql: (p) => `SELECT f.dt AS date, f.campaign_id AS campaign_id, f.campaign_name AS campaign, ${GOOGLE_MEASURE}
 FROM data_warehouse_prod.ads_marketing_campaign_daily f
 WHERE f.${GOOGLE_FILTER} AND f.campaign_name IS NOT NULL AND TRIM(f.campaign_name) != ''
-GROUP BY f.dt, f.campaign_name
+GROUP BY f.dt, f.campaign_id, f.campaign_name
 `
       .replace(/{{START}}/g, p.start).replace(/{{END}}/g, p.end),
   },

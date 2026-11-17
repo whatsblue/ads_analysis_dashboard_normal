@@ -9,7 +9,7 @@ import { pickKeys } from '@/stores/filter';
 import { withCmps, type TableRow } from '@/composables/useRows';
 import { G_ACC_COLS, G_CMP_COLS } from '@/specs/columns';
 import MultiDropdown from '@/components/MultiDropdown.vue';
-import MetricsTable from '@/components/MetricsTable.vue';
+import MetricsTable, { type PreCol } from '@/components/MetricsTable.vue';
 
 const data = useDataStore();
 const filter = useFilterStore();
@@ -39,14 +39,24 @@ const accRows = computed<TableRow[]>(() => {
 const cmpSel = ref<string[]>([]);
 const cmpExcl = ref(false);
 
+/* v5 桶键=平台数字 ID（同 Meta m2b）：行 label=key=ID，名称列 pre 前置（cmpNames 反查）并随首列双冻结 */
+const campNamePre = computed<PreCol[]>(() => [
+  {
+    name: 'Campaign 名称',
+    w: '200px',
+    get: (r): string => data.gCmpName(String((r as unknown as { key?: unknown }).key)),
+  },
+]);
+const campLbl = (id: string): string => data.gCmpName(id);
+
 const campRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const s = filter.applied.start;
   const e = filter.applied.end;
   const pk = pickKeys(cmpSel.value, cmpExcl.value, data.gCampaigns);
-  const rows = (pk || data.gCampaigns).map((cp) => ({ label: cp, m: data.gCmpRange(cp, s, e) }));
+  const rows = (pk || data.gCampaigns).map((id) => ({ label: id, key: id, m: data.gCmpRange(id, s, e) }));
   rows.sort((x, y) => y.m.spend - x.m.spend);
-  return withCmps(rows, (r, _i, rg) => data.gCmpRange(r.label, rg.start, rg.end));
+  return withCmps(rows, (r, _i, rg) => data.gCmpRange(r.key as string, rg.start, rg.end));
 });
 </script>
 
@@ -64,12 +74,24 @@ const campRows = computed<TableRow[]>(() => {
       :day-fn="(r, d) => data.gAccDay(r.label, d)"
     />
 
-    <MetricsTable tid="gmc" title="Campaign 明细" first-col="Campaign" :rows="campRows" mode="g" :cols="G_CMP_COLS" no-pct>
+    <MetricsTable
+      tid="gmc"
+      title="Campaign 明细"
+      first-col="Campaign ID"
+      :rows="campRows"
+      mode="g"
+      :cols="G_CMP_COLS"
+      no-pct
+      sticky2
+      fit-cols
+      :pre="campNamePre"
+    >
       <template #head-extra>
         <MultiDropdown
           label="广告系列"
           all-name="广告系列"
           :items="data.gCampaigns"
+          :label-fn="campLbl"
           :selected="cmpSel"
           :excl="cmpExcl"
           clearable

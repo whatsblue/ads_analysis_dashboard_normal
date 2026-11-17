@@ -2,7 +2,9 @@
 
 > 本文是 `pipeline`（生产方）与 `frontend`（消费方）之间的唯一契约。任何字段变更必须先改本文并同步双方评审。
 > 版本：v4（v1 对齐原型 `ads_real.js` 的 `window.RD`；v2 新增 `google/cmp.json`；v3 改为月度分片 `months/<YYYY-MM>.json`；
-> v4 Google 行集 7 元化（第 7 位=unified_interactions）+orders 改 unified_orders+google_type 换源 deep_dive+全 SQL 收敛 shopify 站点，2026-11-14 三方核对对齐观远）
+> v4 Google 行集 7 元化（第 7 位=unified_interactions）+orders 改 unified_orders+google_type 换源 deep_dive+全 SQL 收敛 shopify 站点，2026-11-14 三方核对对齐观远；
+> v5 campaign 明细桶键改系列 ID（metaCampaigns/gCampaigns/meta/camp.json/google/cmp.json 键=ID，同名不同 ID 系列不再合并；
+> dims 新增 metaCampNames ID→名称映射，修复 Meta Campaign 明细对不齐观远，2026-11-17）
 
 ## 1. 总则
 
@@ -91,8 +93,9 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 {
   "metaAccounts": ["NEWBELLA-AR007", "..."],   // 含 Read-Only 监控账号（前端过滤展示）
   "gAccounts":    ["NEWBELLA-US01"],
-  "metaCampaigns": ["..."],                     // 2000+，Google 系列名映射见 google/type.json 的 campaigns
-  "gCampaigns":   ["..."],
+  "metaCampaigns": ["..."],                     // 2000+；v5 起=系列 ID（campaign_name 分组曾合并同名不同 ID 系列致虚大）
+  "gCampaigns":   ["..."],                      // v5 起=平台数字 ID
+  "metaCampNames": { "120248651012550534": "20261028_vvy_ASC_...", "...": "..." },  // v5：Meta 系列 ID→名称（前端名称列/下拉展示用）
   "spus":  ["8GG02BL5", "..."],                 // Meta SPU
   "gSpus": ["UNKNOWN", "AWF02776", "..."],      // Google SPU（UNKNOWN 保留）
   "spuAccs": { "AWF04228": ["cosyisland 9"], "...": ["..."] },  // SPU→有数据的账号（联动筛选用）
@@ -132,7 +135,7 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 }
 ```
 
-**meta/camp.json**：`{ 系列名: { 日期: {站点|A: MetaCell} } }`（键= dims.metaCampaigns 成员）
+**meta/camp.json**：`{ 系列ID: { 日期: {站点|A: MetaCell} } }`（键= dims.metaCampaigns 成员；v5 起键=系列 ID，名称查 dims.metaCampNames）
 
 **meta/spu.json**：`{ SPU: { 日期: {站点|A: MetaCell} } }`（8 元含 inter）
 
@@ -152,7 +155,7 @@ GoogleCtyCell = [spend, impressions, clicks, orders, vs, va, inter]
 **google/acc.json**：`{ 账号: { 日期: GoogleCell } }`（7 元含 inter）；**google/spu.json**、channel.google、google/type.json 同构（7 元）
 **google/dim.json**：`{ "ctry": {国家: {日期: GoogleCtyCell}}, "age": {年龄段: {日期: GoogleCell}} }`（age 恒 6 元）
 **google/type.json**：`{ "typeBrand": { "search|no brand": { 日期: GoogleCell } }, "cmpNames": { "10579": "系列名", "...": "..." } }`（v4 换源 deep_dive：type 键小写 search/shopping/pmax/demandgen/display/unknown，brand 键=brand/no brand/unknown）
-**google/cmp.json**（v2 新增）：`{ 系列名或数字ID: { 日期: GoogleCell } }`；枚举= dims.gCampaigns，未携带名称映射的数字 ID 原样展示
+**google/cmp.json**（v2 新增）：`{ 系列数字ID: { 日期: GoogleCell } }`；枚举= dims.gCampaigns（v5 起恒为数字 ID），名称查 google/type.json 的 cmpNames
 
 ## 4. 校验规则（pipeline/src/validate.ts 强制执行；v3 逐月分片运行）
 

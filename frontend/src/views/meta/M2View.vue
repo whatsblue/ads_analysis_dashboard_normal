@@ -12,7 +12,7 @@ import { pickKeys } from '@/stores/filter';
 import { withCmps, type TableRow } from '@/composables/useRows';
 import { M2A_COLS, M2A_GMAP } from '@/specs/columns';
 import MultiDropdown from '@/components/MultiDropdown.vue';
-import MetricsTable from '@/components/MetricsTable.vue';
+import MetricsTable, { type PreCol } from '@/components/MetricsTable.vue';
 
 const data = useDataStore();
 const filter = useFilterStore();
@@ -44,6 +44,20 @@ const accRows = computed<TableRow[]>(() => {
 const cmpSel = ref<string[]>([]);
 const cmpExcl = ref(false);
 
+/* v5 桶键=系列 ID（同名不同 ID 系列不再合并，2026-11-17 修复 Campaign 明细对不齐观远）：
+   行 label=key=ID（首列 Campaign ID），名称列 pre 前置并随首列双冻结 */
+const campNamePre = computed<PreCol[]>(() => [
+  {
+    name: 'Campaign 名称',
+    w: '200px',
+    get: (r): string => {
+      const id = String((r as unknown as { key?: unknown }).key);
+      return data.metaCampNames[id] || id;
+    },
+  },
+]);
+const campLbl = (id: string): string => data.metaCampNames[id] || id;
+
 const campRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const s = filter.applied.start;
@@ -51,16 +65,16 @@ const campRows = computed<TableRow[]>(() => {
   const agg = data.metaDimRange('camp', s, e);
   const pk = pickKeys(cmpSel.value, cmpExcl.value, data.metaCampaigns);
   const keys = Object.keys(agg)
-    .filter((k) => {
-      const m0 = agg[k];
+    .filter((id) => {
+      const m0 = agg[id];
       // 零花费但有订单/销售的行保留，保证总计=全量（同观远）
       if (m0.spend <= 0 && m0.orders <= 0 && m0.value <= 0) return false;
-      if (pk && !pk.includes(k)) return false;
+      if (pk && !pk.includes(id)) return false;
       return true;
     })
     .sort((x, y) => agg[y].spend - agg[x].spend);
-  const rows = keys.map((k) => ({ label: k, m: agg[k] }));
-  return withCmps(rows, (r, _i, rg) => data.metaDimRange('camp', rg.start, rg.end)[r.label] ?? zero());
+  const rows = keys.map((id) => ({ label: id, key: id, m: agg[id] }));
+  return withCmps(rows, (r, _i, rg) => data.metaDimRange('camp', rg.start, rg.end)[r.key as string] ?? zero());
 });
 </script>
 
@@ -78,12 +92,22 @@ const campRows = computed<TableRow[]>(() => {
       :day-fn="(r, d) => data.metaAccDay(r.label, d)"
     />
 
-    <MetricsTable tid="m2b" title="Campaign 明细" first-col="Campaign 名称" :rows="campRows" no-pct>
+    <MetricsTable
+      tid="m2b"
+      title="Campaign 明细"
+      first-col="Campaign ID"
+      :rows="campRows"
+      no-pct
+      sticky2
+      fit-cols
+      :pre="campNamePre"
+    >
       <template #head-extra>
         <MultiDropdown
           label="广告系列"
           all-name="广告系列"
           :items="data.metaCampaigns"
+          :label-fn="campLbl"
           :selected="cmpSel"
           :excl="cmpExcl"
           clearable

@@ -196,6 +196,12 @@ describe('reorc 组装闭环（mock fetch → validate）', () => {
     const ds = await source.fetch();
     expect(ds.channel.meta['2026-11-10']!.A).toEqual([100, 1000, 50, 5, 250, 10, 8, 60]);
     expect(ds.googleType.cmpNames['123']).toBe('PMAX Bella');
+    // v5：campaign 明细桶键=系列 ID（同名不同 ID 不再合并）；名称入 metaCampNames/cmpNames
+    expect(ds.dims.metaCampaigns).toEqual(['cid-1']);
+    expect(ds.dims.metaCampNames).toEqual({ 'cid-1': 'C1' });
+    expect(Object.keys(ds.metaCamp)).toEqual(['cid-1']);
+    expect(ds.dims.gCampaigns).toEqual(['456']); // v5：google_cmp 只维护 cmpNames，枚举成员来自 google_camp 桶键
+    expect(ds.googleType.cmpNames['456']).toBe('GC1');
     expect(() => validateDataset(ds)).not.toThrow();
   });
 });
@@ -212,7 +218,7 @@ function topicRows(sql: string, metaRows: (site: string, acc: string) => Row[], 
   if (sql.includes('DISTINCT campaign_id')) return [{ campaign_id: 123, campaign_name: 'PMAX Bella' }];
   if (sql.includes("'meta'")) {
     if (sql.includes('AS spu')) return withDim(metaRows('shopify', 'acc1'), { spu: 'SKU-A', account: 'acc1' });
-    if (sql.includes('AS campaign')) return withDim(metaRows('shopify', 'acc1'), { campaign: 'C1' });
+    if (sql.includes('AS campaign')) return withDim(metaRows('shopify', 'acc1'), { campaign: 'C1', campaign_id: 'cid-1' });
     if (sql.includes('AS ad_name')) return withDim(metaRows('shopify', 'acc1'), { ad_name: 'ad-1', ad_type: 'image', ad_no: 'N01' });
     if (sql.includes('AS account')) return withDim(metaRows('shopify', 'acc1'), { account: 'acc1' });
     if (sql.includes('AS ctype')) return withDim(metaRows('shopify', 'acc1'), { ctype: 'VIDEO' });
@@ -224,6 +230,7 @@ function topicRows(sql: string, metaRows: (site: string, acc: string) => Row[], 
   }
   // v4：google_type 换源 deep_dive，WHERE 不再含 'google' 字面量，按表名补充分派
   if (sql.includes("'google'") || sql.includes('ads_google_deep_dive_daily')) {
+    if (sql.includes('AS campaign')) return withDim(gRows(), { campaign_id: 456, campaign: 'GC1' });
     if (sql.includes('AS brand')) return withDim(gRows(), { type: 'pmax', brand: 'brand' });
     if (sql.includes('AS spu')) return withDim(gRows(), { spu: 'GSKU' });
     if (sql.includes('AS account')) return withDim(gRows(), { account: 'g1' });

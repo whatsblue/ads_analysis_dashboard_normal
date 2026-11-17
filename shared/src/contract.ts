@@ -3,7 +3,7 @@
  * 规范文档：docs/DATA_CONTRACT.md。变更需同步文档并 CONTRACT_VERSION +1。
  */
 
-export const CONTRACT_VERSION = 4;
+export const CONTRACT_VERSION = 5;
 
 /** 日期字符串（YYYY-MM-DD） */
 export type DateStr = string;
@@ -57,8 +57,12 @@ export type AdEntry = [string, string, string];
 export interface Dims {
   metaAccounts: string[];
   gAccounts: string[];
+  /** Meta 系列枚举；v5 起成员=系列 ID（同名系列按 ID 分桶，修复观远对不齐） */
   metaCampaigns: string[];
+  /** Google 系列枚举；v5 起成员=平台数字 ID（同上） */
   gCampaigns: string[];
+  /** Meta 系列 ID→名称（v5 新增；桶键改 ID 后前端展示名称与筛选下拉用） */
+  metaCampNames: Record<string, string>;
   spus: string[];
   gSpus: string[];
   spuAccs: Record<string, string[]>;
@@ -109,7 +113,7 @@ export interface GoogleTypeData {
   cmpNames: Record<string, string>;
 }
 
-/** google/cmp.json：Google Campaign 日桶（键=系列名或平台数字 ID；v2 新增，gm2 Campaign 明细用） */
+/** google/cmp.json：Google Campaign 日桶（v5 起键=平台数字 ID，原系列名；gm2 Campaign 明细用） */
 export type GoogleCmpData = GoogleDimBucket;
 
 /** v3 月度分片（months/<YYYY-MM>.json）：单自然月全部日粒度结构；
@@ -118,6 +122,7 @@ export interface MonthSlice {
   month: string;
   channel: ChannelData;
   metaAcc: MetaDimBucket;
+  /** v5 起键=系列 ID（原系列名；同名不同 ID 系列不再合并，修复 Campaign 明细数字虚大） */
   metaCamp: MetaDimBucket;
   metaSpu: MetaDimBucket;
   metaDim: MetaDimData;

@@ -27,6 +27,7 @@ function rdFixture(): string {
     gAccounts: ['gacc-a'],
     metaCampaigns: ['camp-1'],
     gCampaigns: ['gcamp-1'],
+    metaCampNames: { 'camp-1': 'Camp-1 名称' },
     spus: ['SPU1'],
     gSpus: ['GSPU1'],
     spuAccs: { SPU1: ['acc-a'] },
@@ -90,7 +91,7 @@ describe('rdfile 通道', () => {
       expect(result.files.map((f) => f.path)).toContain('meta/creative.json');
       expect(result.files.map((f) => f.path)).toContain('google/cmp.json');
       const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
-      expect(manifest.v).toBe(4);
+      expect(manifest.v).toBe(5); // v5 campaign 桶键改系列 ID
       expect(manifest.months).toEqual(['2026-11']); // fixture 跨度 11-01~11-02
     } finally {
       rmSync(dir, { recursive: true, force: true });

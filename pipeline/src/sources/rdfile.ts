@@ -27,6 +27,8 @@ interface RD {
   gAccounts: string[];
   metaCampaigns: string[];
   gCampaigns: string[];
+  /** v5：Meta 系列 ID→名称（原型 RD 无此字段，可选兼容；缺失时前端回退显示 ID） */
+  metaCampNames?: Record<string, string>;
   spus: string[];
   gSpus: string[];
   spuAccs: Record<string, string[]>;
@@ -90,6 +92,7 @@ export function rdToDataset(rd: RD): RawDataset {
     gAccounts: rd.gAccounts,
     metaCampaigns: rd.metaCampaigns,
     gCampaigns: rd.gCampaigns,
+    metaCampNames: rd.metaCampNames ?? {},
     spus: rd.spus,
     gSpus: rd.gSpus,
     spuAccs: rd.spuAccs,

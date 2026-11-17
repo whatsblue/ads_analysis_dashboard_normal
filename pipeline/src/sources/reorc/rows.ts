@@ -121,6 +121,8 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
   const googleSpu: RawDataset['googleSpu'] = {};
   const googleType: RawDataset['googleType'] = { typeBrand: {}, cmpNames: {} };
   const googleCmp: NonNullable<RawDataset['googleCmp']> = {};
+  /** Meta 系列 ID→名称（v5：桶键改 ID 后前端展示名称用；同名不同 ID 系列不再合并） */
+  const metaCampNames: Record<string, string> = {};
 
   // 维度枚举（保序 distinct）
   const seen = {
@@ -149,9 +151,12 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     putMetaDay(metaDayOf(metaAcc, account, dateStr(row.date, 'meta_acc')), siteKey(row.site), metaCell(row));
   }
   for (const row of rows.meta_camp ?? []) {
-    const campaign = str(row.campaign);
-    seen.metaCampaigns.add(campaign);
-    putMetaDay(metaDayOf(metaCamp, campaign, dateStr(row.date, 'meta_camp')), siteKey(row.site), metaCell(row));
+    const name = str(row.campaign);
+    // v5 桶键=系列 ID：同名不同 ID 系列不再被名称合并（修复 Campaign 明细数字虚大、对不齐观远）；ID 缺失回退名称
+    const key = str(row.campaign_id) || name;
+    metaCampNames[key] = name;
+    seen.metaCampaigns.add(key);
+    putMetaDay(metaDayOf(metaCamp, key, dateStr(row.date, 'meta_camp')), siteKey(row.site), metaCell(row));
   }
   for (const row of rows.meta_spu ?? []) {
     const spu = str(row.spu);
@@ -212,12 +217,15 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
   }
   for (const row of rows.google_cmp ?? []) {
     googleType.cmpNames[str(row.campaign_id)] = str(row.campaign_name);
-    seen.gCampaigns.add(str(row.campaign_name));
+    // v5：gCampaigns 枚举改由 google_camp（桶键=ID）维护，此处不再注入名称键
   }
   for (const row of rows.google_camp ?? []) {
-    const cp = str(row.campaign);
-    seen.gCampaigns.add(cp);
-    const b = googleBucketOf(googleCmp, cp);
+    const name = str(row.campaign);
+    // v5 桶键=平台数字 ID（同 meta_camp）；cmpNames 从行直接维护（与 google_cmp 幂等）
+    const key = str(row.campaign_id) || name;
+    googleType.cmpNames[key] = name;
+    seen.gCampaigns.add(key);
+    const b = googleBucketOf(googleCmp, key);
     const date = dateStr(row.date, 'google_camp');
     b[date] = addInto(b[date], googleCell7(row)) as GoogleCell;
   }
@@ -270,6 +278,7 @@ export function rowsToDataset(rows: RowsByTopic, ctx: RowsContext): RawDataset {
     gAccounts: [...seen.gAccounts],
     metaCampaigns: [...seen.metaCampaigns],
     gCampaigns: [...seen.gCampaigns],
+    metaCampNames,
     spus: [...seen.spus],
     gSpus: [...seen.gSpus],
     spuAccs: Object.fromEntries([...seen.spuAccs].map(([spu, accs]) => [spu, [...accs]])),
