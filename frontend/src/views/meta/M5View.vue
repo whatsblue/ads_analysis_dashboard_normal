@@ -4,8 +4,9 @@
  * 趋势对比（指标 10 项多选上限 2 + 地区 A/B 单选，默认美国 vs 非美国·花费）
  * + US/Non-US 拆分两行表 + 国家对比明细（默认花费 Top5）。
  * 趋势图 2026-11-15 用户定版：去单次加购/单次结帐；上限 2 项，先点柱状（左轴）后点折线（右轴）；颜色按国家分组（同国柱线同色）。
+ * 趋势对比默认地区 2026-11-17 用户定版：全局 AE/SA，不再用 US/Non-US。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { addMetrics, dateRange, derive, zero, type Metrics } from '@ads/shared';
 import { useDataStore } from '@/stores/data';
 import { useFilterStore } from '@/stores/filter';
@@ -45,19 +46,12 @@ function onEsc(e: KeyboardEvent): void {
 
 const trendMs = ref<string[]>(['spend', 'roas']);
 
-/** 单选 Shoplazza 站点（2026-11-17 用户定版：该站点下隐藏 US & Non-US 对比明细，趋势对比默认地区改为 AE/SA） */
+/** 单选 Shoplazza 站点（2026-11-17 用户定版：该站点下隐藏 US & Non-US 对比明细） */
 const isSls = computed(() => filter.applied.sites.length === 1 && filter.applied.sites[0] === 'Shoplazza');
 
-const trendA = ref(isSls.value ? 'AE' : 'United States');
-const trendB = ref(isSls.value ? 'SA' : '非美国');
-/* 切换销售站点时重置为该站点默认对比地区（Shoplazza=AE/SA，其余=US/Non-US） */
-watch(
-  () => filter.applied.sites.join(','),
-  () => {
-    trendA.value = isSls.value ? 'AE' : 'United States';
-    trendB.value = isSls.value ? 'SA' : '非美国';
-  },
-);
+/* 趋势对比默认地区 AE/SA（2026-11-17 用户定版：所有站点统一默认，不再用 US/Non-US） */
+const trendA = ref('AE');
+const trendB = ref('SA');
 const ddOpen = ref<'' | 'm' | 'a' | 'b'>('');
 
 function ctyLbl(nm: string): string {
