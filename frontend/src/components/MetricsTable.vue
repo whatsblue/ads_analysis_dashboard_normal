@@ -198,11 +198,19 @@ const rowsD = computed<{ r: TableRow; d: Record<string, number> }[]>(() => {
   const arr = props.rows.map((r) => ({ r, d: deriveRow(r.m) }));
   if (!sortCol.value) return arr;
   const k = sortCol.value;
+  /* 占比列（*_pct）不在 derive 结果中，排序键走 pctVal（与显示同一集合分母，2026-11-17 用户定版支持点击占比列排序） */
+  const isPct = PCT_K.includes(k as (typeof PCT_K)[number]);
+  const keyOf = (o: { r: TableRow; d: Record<string, number> }): number => {
+    if (isPct) {
+      const v = pctVal(k, o.r.m, dens.value);
+      return v == null || isNaN(v) ? -Infinity : v;
+    }
+    const v = o.d[k] as number | undefined;
+    return v == null || isNaN(v) ? -Infinity : v;
+  };
   arr.sort((a, b) => {
-    let x = a.d[k] as number | undefined;
-    let y = b.d[k] as number | undefined;
-    if (x == null || isNaN(x)) x = -Infinity;
-    if (y == null || isNaN(y)) y = -Infinity;
+    const x = keyOf(a);
+    const y = keyOf(b);
     return sortDir.value === 'desc' ? y - x : x - y;
   });
   return arr;
