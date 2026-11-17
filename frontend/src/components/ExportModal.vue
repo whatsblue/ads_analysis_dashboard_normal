@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * 导出弹窗（迁移自原型 expModal）：列勾选 + 拖拽排序 + 粒度（区间/按日）+ 显示环比 + 格式（xls/csv）。
+ * 导出弹窗（迁移自原型 expModal）：列勾选 + 拖拽排序 + 粒度（区间/按日）+ 格式（xls/csv）。
+ * 环比跟随前端当前表的显示状态导出（2026-11-17 用户定版：弹窗不再单独提供开关）。
  * 纯 UI 组件：下载逻辑由父（MetricsTable/视图）在 @download 中执行。
  */
 import { ref, watch } from 'vue';
@@ -8,7 +9,6 @@ import { ref, watch } from 'vue';
 export interface ExportCfg {
   names: string[];
   gran: 'range' | 'day';
-  showCmp: boolean;
   fmt: 'xls' | 'csv';
 }
 
@@ -25,7 +25,6 @@ const emit = defineEmits<{ close: []; download: [cfg: ExportCfg] }>();
 const order = ref<string[]>([]);
 const sel = ref<string[]>([]);
 const gran = ref<'range' | 'day'>('range');
-const showCmp = ref(false); // 2026-11-15 用户定版：明细导出默认不勾选显示环比（打开弹窗不重置，跨打开保留）
 const fmt = ref<'xls' | 'csv'>('xls');
 const dragIx = ref(-1);
 const overIx = ref(-1);
@@ -61,7 +60,7 @@ function ok(): void {
     alert('请至少勾选一列');
     return;
   }
-  emit('download', { names: order.value.filter((n) => sel.value.includes(n)), gran: gran.value, showCmp: showCmp.value, fmt: fmt.value });
+  emit('download', { names: order.value.filter((n) => sel.value.includes(n)), gran: gran.value, fmt: fmt.value });
 }
 </script>
 
@@ -71,7 +70,7 @@ function ok(): void {
       <div class="modal">
         <button class="x" @click="emit('close')">✕</button>
         <h3>导出 · {{ props.title }}</h3>
-        <div class="exp-hint">勾选所需列；拖动行可直接调整列顺序；选择导出粒度后下载（含环比数值）</div>
+        <div class="exp-hint">勾选所需列；拖动行可直接调整列顺序；环比行跟随页面当前表的环比状态导出</div>
         <div class="frow exp-tools">
           <button class="btn xs" @click="sel = order.slice()">全选</button>
           <button class="btn xs" @click="sel = []">清空</button>
@@ -79,8 +78,6 @@ function ok(): void {
             粒度：
             <label><input type="radio" value="range" v-model="gran" />按日期范围</label>
             <label><input type="radio" value="day" v-model="gran" />按日</label>
-            ｜
-            <label><input type="checkbox" v-model="showCmp" />显示环比</label>
             ｜
             <label><input type="radio" value="xls" v-model="fmt" />Excel(.xls)</label>
             <label><input type="radio" value="csv" v-model="fmt" />CSV</label>

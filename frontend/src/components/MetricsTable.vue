@@ -18,7 +18,7 @@ import { deltaPct } from '@ads/shared';
 import { G_COLS, G_GROUP_DEF, METRIC_GROUPS, PCT_COLS, PCT_DEF, STD_COLS, TH_TIP, type ColDef, type GroupMap } from '@/specs/columns';
 import type { CmpCell, TableRow } from '@/composables/useRows';
 import { useFilterStore } from '@/stores/filter';
-import { csvCell, downloadCsv, downloadXls, plainPct, safeFname } from '@/utils/export';
+import { deltaCell, downloadCsv, downloadXls, safeFname, type ExpCell } from '@/utils/export';
 import { hideAttrLater, showAttr } from '@/composables/useAttrTip';
 import '@/composables/useThTip';
 import ExportModal, { type ExportCfg } from './ExportModal.vue';
@@ -340,14 +340,24 @@ function doExport(cfg: ExportCfg): void {
   const t = { pre: props.pre, firstCol: props.firstCol, dateInline: props.dateInline };
   const names = cfg.names;
   const dateTxt = filter.applied.start + ' ~ ' + filter.applied.end;
-  const arr: string[][] = [names.slice()];
+  const arr: ExpCell[][] = [names.slice()];
 
-  function rowObj(o: { r: TableRow; d: Record<string, number> }): Record<string, string> {
-    const o2: Record<string, string> = {};
+  /* 数值单元格（2026-11-17 用户定版）：指标真数值、占比/比率为 pct（xls 百分比格式）；无效值 '—' 占位 */
+  function expVal(c: { k: string }, d: Record<string, number>, m: Metrics, dens: number): ExpCell {
+    if (PCT_K.includes(c.k as (typeof PCT_K)[number])) {
+      const v = pctVal(c.k, m, dens);
+      return v == null || isNaN(v) ? '—' : { pct: v };
+    }
+    const v = d[c.k];
+    return v == null || isNaN(v) ? '—' : v;
+  }
+
+  function rowObj(o: { r: TableRow; d: Record<string, number> }): Record<string, ExpCell> {
+    const o2: Record<string, ExpCell> = {};
     o2[t.firstCol] = String(o.r.label ?? '');
     props.pre?.forEach((p) => (o2[p.name] = expCell(p.get(o.r as never))));
     if (!t.dateInline) o2['日期'] = dateTxt;
-    cols.value.forEach((c) => (o2[c.name] = cellText(c, o.d, o.r.m, dens.value)));
+    cols.value.forEach((c) => (o2[c.name] = expVal(c, o.d, o.r.m, dens.value)));
     return o2;
   }
 
@@ -358,30 +368,36 @@ function doExport(cfg: ExportCfg): void {
         const dv = props.dayFn(o.r, d);
         if (!dv) continue;
         const dd = deriveRow(dv);
-        const o2: Record<string, string> = {};
+        const o2: Record<string, ExpCell> = {};
         o2[t.firstCol] = t.firstCol === '日期' ? d : String(o.r.label ?? '');
         props.pre?.forEach((p) => (o2[p.name] = expCell(p.get(o.r as never))));
         if (!t.dateInline) o2['日期'] = d;
-        colsBase.value.forEach((c) => (o2[c.name] = c.fmt(dd[c.k])));
-        arr.push(names.map((n) => csvCell(o2[n] ?? '')));
+        colsBase.value.forEach((c) => {
+          const v = dd[c.k];
+          o2[c.name] = PCT_K.includes(c.k as (typeof PCT_K)[number])
+            ? v == null || isNaN(v) ? '—' : { pct: v }
+            : v == null || isNaN(v) ? '—' : v;
+        });
+        arr.push(names.map((n) => o2[n] ?? ''));
       }
     }
   } else {
     for (const o of rowsD.value) {
-      arr.push(names.map((n) => csvCell(rowObj(o)[n] ?? '')));
-      if (cfg.showCmp && filter.applied.cmpOn && o.r.cmps) {
+      arr.push(names.map((n) => rowObj(o)[n] ?? ''));
+      /* 环比行跟随前端当前表的环比状态（2026-11-17 定版：弹窗不再单独提供开关） */
+      if (cmpOn.value && o.r.cmps) {
         for (const cm of o.r.cmps) {
           const cd = deriveRow(cm.m);
           // 对比期行
-          const oc: Record<string, string> = {};
+          const oc: Record<string, ExpCell> = {};
           oc[t.firstCol] = '';
           props.pre?.forEach((p) => (oc[p.name] = expCell(p.get(o.r as never))));
           if (!t.dateInline) oc['日期'] = cm.start + ' ~ ' + cm.end;
           else oc[t.firstCol] = cm.start + ' ~ ' + cm.end;
-          cols.value.forEach((c) => (oc[c.name] = cellText(c, cd, cm.m, cmpDens.value)));
-          arr.push(names.map((n) => csvCell(oc[n] ?? '')));
+          cols.value.forEach((c) => (oc[c.name] = expVal(c, cd, cm.m, cmpDens.value)));
+          arr.push(names.map((n) => oc[n] ?? ''));
           // Δ行（占比列=占比值变化率；其余=指标变化率）
-          const od: Record<string, string> = {};
+          const od: Record<string, ExpCell> = {};
           od[t.firstCol] = t.dateInline ? '环比' : '';
           props.pre?.forEach((p) => (od[p.name] = ''));
           if (!t.dateInline) od['日期'] = '环比';
@@ -395,9 +411,9 @@ function doExport(cfg: ExportCfg): void {
               cur = o.d[c.k] ?? null;
               prev = cd[c.k] ?? null;
             }
-            od[c.name] = plainPct(cur, prev);
+            od[c.name] = deltaCell(cur, prev);
           });
-          arr.push(names.map((n) => csvCell(od[n] ?? '')));
+          arr.push(names.map((n) => od[n] ?? ''));
         }
       }
     }
@@ -409,14 +425,15 @@ function doExport(cfg: ExportCfg): void {
     if (tAll.length) {
       const tm = sumMetrics(tAll.map((r) => r.m));
       const dt2 = deriveRow(tm);
-      const ot: Record<string, string> = {};
+      const ot: Record<string, ExpCell> = {};
       ot[t.firstCol] = '总计';
       props.pre?.forEach((p) => (ot[p.name] = ''));
       if (!t.dateInline) ot['日期'] = dateTxt;
       cols.value.forEach((c) => {
-        ot[c.name] = PCT_K.includes(c.k as (typeof PCT_K)[number]) ? c.fmt(1) : c.fmt(dt2[c.k]);
+        const v = dt2[c.k];
+        ot[c.name] = PCT_K.includes(c.k as (typeof PCT_K)[number]) ? { pct: 1 } : v == null || isNaN(v) ? '—' : v;
       });
-      arr.push(names.map((n) => csvCell(ot[n] ?? '')));
+      arr.push(names.map((n) => ot[n] ?? ''));
     }
   }
 

@@ -5,12 +5,12 @@
  * + 渠道花费占比/ROAS 对比 + 渠道对比明细表（Google atc/ckt=0、hover 归因；EDM 不入对比明细与总计）。
  */
 import { computed, onMounted, ref } from 'vue';
-import { dateRange, derive, esc, fmtMoney, fmtPct, fmtRoas, type Metrics } from '@ads/shared';
+import { dateRange, derive, fmtMoney, fmtPct, fmtRoas, type Metrics } from '@ads/shared';
 import { useDataStore } from '@/stores/data';
 import { useFilterStore } from '@/stores/filter';
 import { withCmps, type TableRow } from '@/composables/useRows';
 import { bucketAgg, donutOption, hBarOption, trendOption, type ObjLinesSpec } from '@/specs/charts';
-import { downloadXls, plainPct } from '@/utils/export';
+import { deltaCell, downloadXls, type ExpCell } from '@/utils/export';
 import BaseChart from '@/components/BaseChart.vue';
 import MetricsTable from '@/components/MetricsTable.vue';
 
@@ -161,21 +161,22 @@ function ovExport(): void {
   const cmp = !!pv;
   const head = cmp ? ['渠道', '花费', '花费环比', 'GMV', 'GMV环比', 'GMV占比', 'ROAS', 'ROAS环比'] : ['渠道', '花费', 'GMV', 'GMV占比', 'ROAS'];
   const chGmv = cur.meta.value + cur.goog.value + cur.edm.value;
-  const arr: string[][] = [head];
-  const row = (nm: string, sp: number | null, spP: number | null, gm: number, gmP: number | null, pct: string, ro: number | null, roP: number | null): void => {
-    const r2 = [nm, sp == null ? '—' : fmtMoney(sp)];
-    if (cmp) r2.push(pv && spP != null ? plainPct(sp, spP) : '');
-    r2.push(fmtMoney(gm));
-    if (cmp) r2.push(pv && gmP != null ? plainPct(gm, gmP) : '');
-    r2.push(pct, ro == null || isNaN(ro) ? '—' : fmtRoas(ro));
-    if (cmp) r2.push(pv && roP != null && !isNaN(roP) ? plainPct(ro, roP) : '');
+  const arr: ExpCell[][] = [head];
+  const gp = (x: number): ExpCell => (isFinite(x) ? { pct: x } : '—');
+  const row = (nm: string, sp: number | null, spP: number | null, gm: number, gmP: number | null, pct: ExpCell, ro: number | null, roP: number | null): void => {
+    const r2: ExpCell[] = [nm, sp == null ? '—' : sp];
+    if (cmp) r2.push(pv && spP != null ? deltaCell(sp, spP) : '');
+    r2.push(gm);
+    if (cmp) r2.push(pv && gmP != null ? deltaCell(gm, gmP) : '');
+    r2.push(pct, ro == null || isNaN(ro) ? '—' : ro);
+    if (cmp) r2.push(pv && roP != null && !isNaN(roP) ? deltaCell(ro, roP) : '');
     arr.push(r2);
   };
   row('整站', cur.siteSpend, pv ? pv.siteSpend : null, cur.gmv, pv ? pv.gmv : null, '—', cur.siteSpend ? cur.gmv / cur.siteSpend : NaN, pv && pv.siteSpend ? pv.gmv / pv.siteSpend : NaN);
-  row('Meta', cur.meta.spend, pv ? pv.meta.spend : null, cur.meta.value, pv ? pv.meta.value : null, fmtPct(chGmv ? cur.meta.value / chGmv : NaN), roasOf(cur.meta), pv ? roasOf(pv.meta) : NaN);
-  row('Google', cur.goog.spend, pv ? pv.goog.spend : null, cur.goog.value, pv ? pv.goog.value : null, fmtPct(chGmv ? cur.goog.value / chGmv : NaN), roasOf(cur.goog), pv ? roasOf(pv.goog) : NaN);
-  row('EDM', null, null, cur.edm.value, pv ? pv.edm.value : null, fmtPct(chGmv ? cur.edm.value / chGmv : NaN), null, null);
-  downloadXls(arr.map((r) => r.map((c) => esc(c))), '大盘总览');
+  row('Meta', cur.meta.spend, pv ? pv.meta.spend : null, cur.meta.value, pv ? pv.meta.value : null, gp(chGmv ? cur.meta.value / chGmv : NaN), roasOf(cur.meta), pv ? roasOf(pv.meta) : NaN);
+  row('Google', cur.goog.spend, pv ? pv.goog.spend : null, cur.goog.value, pv ? pv.goog.value : null, gp(chGmv ? cur.goog.value / chGmv : NaN), roasOf(cur.goog), pv ? roasOf(pv.goog) : NaN);
+  row('EDM', null, null, cur.edm.value, pv ? pv.edm.value : null, gp(chGmv ? cur.edm.value / chGmv : NaN), null, null);
+  downloadXls(arr, '大盘总览');
 }
 </script>
 
