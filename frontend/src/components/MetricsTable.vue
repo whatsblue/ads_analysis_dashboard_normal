@@ -460,6 +460,11 @@ function doExport(cfg: ExportCfg): void {
 }
 
 const rangeTxt = computed(() => filter.applied.start + ' ~ ' + filter.applied.end);
+/** 表内日期短格式（2026-11-17 用户反馈：完整区间把 16 列表撑到 ~1320px，1280 有效视口（Windows 150% 缩放）下
+ *  页面被撑出横向滚动，滚到最右后日期列左端被 sticky 首列遮挡呈"-09 ~ …"；去年份省 ~75px，
+ *  悬停 title 仍见完整区间，导出保持完整日期不受影响 */
+const shortRange = (s: string, e: string) => s.slice(5) + ' ~ ' + e.slice(5);
+const rangeShort = computed(() => shortRange(filter.applied.start, filter.applied.end));
 const ncol = computed(() => 1 + (props.pre?.length ?? 0) + (props.dateInline ? 0 : 1) + cols.value.length);
 const cmpOn = computed(() => filter.applied.cmpOn);
 /* fitCols：仅单环比周期（或未开环比）压缩列距；多周期时移除压缩类恢复自然列宽出现滑块 */
@@ -516,12 +521,12 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
           <template v-for="o in show" :key="String(o.r.label) + '|' + (o.r.key ?? '')">
             <!-- 本期行 -->
             <tr>
-              <td>
+              <td :title="props.dateInline ? rangeTxt : undefined">
                 <slot name="first" :row="o.r" :range="rangeTxt">
                   <span v-if="props.linkFirst" class="flink" :title="props.firstTip || '点击下钻查看该类型 Top 素材'" @click="emit('link', String(o.r.label))">
-                    {{ props.dateInline ? rangeTxt : o.r.label }}
+                    {{ props.dateInline ? rangeShort : o.r.label }}
                   </span>
-                  <template v-else>{{ props.dateInline ? rangeTxt : o.r.label }}</template>
+                  <template v-else>{{ props.dateInline ? rangeShort : o.r.label }}</template>
                 </slot>
               </td>
               <td v-for="(p, pi) in props.pre" :key="p.name" :style="p.w ? { maxWidth: p.w, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined">
@@ -533,7 +538,7 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
                 </template>
                 <template v-else>{{ typeof p.get(o.r as never) === 'string' ? p.get(o.r as never) : (p.get(o.r as never) as PreCell).text }}</template>
               </td>
-              <td v-if="!props.dateInline">{{ rangeTxt }}</td>
+              <td v-if="!props.dateInline" :title="rangeTxt">{{ rangeShort }}</td>
               <td v-for="c in cols" :key="c.k">{{ cellText(c, o.d, o.r.m, dens) }}</td>
             </tr>
             <!-- 展开成员行（素材编号行组） -->
@@ -551,9 +556,9 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
             <template v-if="cmpOn && o.r.cmps">
               <template v-for="(cm, ci) in o.r.cmps" :key="'cmp-' + ci + '-' + String(o.r.label)">
                 <tr class="cmp-d">
-                  <td>{{ props.dateInline ? cm.start + ' ~ ' + cm.end : '' }}</td>
+                  <td :title="props.dateInline ? cm.start + ' ~ ' + cm.end : undefined">{{ props.dateInline ? shortRange(cm.start, cm.end) : '' }}</td>
                   <td v-for="p in props.pre" :key="p.name"></td>
-                  <td v-if="!props.dateInline">{{ cm.start }} ~ {{ cm.end }}</td>
+                  <td v-if="!props.dateInline" :title="cm.start + ' ~ ' + cm.end">{{ shortRange(cm.start, cm.end) }}</td>
                   <td v-for="c in cols" :key="c.k">{{ cellText(c, deriveRow(cm.m), cm.m, cmpDens) }}</td>
                 </tr>
                 <tr class="cmp-delta">

@@ -43,6 +43,7 @@ button {
 .topbar {
   position: sticky;
   top: 0;
+  left: 0; /* 页面级横向滚动时（宽表/多环比周期把页面撑宽的兜底）筛选栏与导航仍钉在视口左缘，不随横滚被裁 */
   z-index: 60;
   background: #fff;
 }

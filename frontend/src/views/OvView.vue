@@ -242,6 +242,7 @@ function ovExport(): void {
       :rows="caRows"
       :day-fn="(r, d) => chM(String(r.ch), d, d)"
       attr-on
+      fit-cols
     >
       <template #first="{ row }">
         <span class="chip" :class="CH_CLS[String(row.ch)]">{{ row.label }}</span>
