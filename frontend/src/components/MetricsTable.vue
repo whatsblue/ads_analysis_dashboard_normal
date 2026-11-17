@@ -18,7 +18,7 @@ import { deltaPct } from '@ads/shared';
 import { G_COLS, G_GROUP_DEF, METRIC_GROUPS, PCT_COLS, PCT_DEF, STD_COLS, TH_TIP, type ColDef, type GroupMap } from '@/specs/columns';
 import type { CmpCell, TableRow } from '@/composables/useRows';
 import { useFilterStore } from '@/stores/filter';
-import { deltaCell, downloadCsv, downloadXls, safeFname, type ExpCell } from '@/utils/export';
+import { deltaCell as deltaExpCell, downloadCsv, downloadXls, safeFname, type ExpCell } from '@/utils/export';
 import { hideAttrLater, showAttr } from '@/composables/useAttrTip';
 import '@/composables/useThTip';
 import ExportModal, { type ExportCfg } from './ExportModal.vue';
@@ -411,7 +411,7 @@ function doExport(cfg: ExportCfg): void {
               cur = o.d[c.k] ?? null;
               prev = cd[c.k] ?? null;
             }
-            od[c.name] = deltaCell(cur, prev);
+            od[c.name] = deltaExpCell(cur, prev);
           });
           arr.push(names.map((n) => od[n] ?? ''));
         }
