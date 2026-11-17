@@ -246,7 +246,7 @@ const ctyRows = computed<TableRow[]>(() => {
 
     <MetricsTable
       tid="m5b"
-      title="United States / Non-US 拆分明细"
+      title="US & Non-US 对比明细"
       first-col="分类"
       :rows="usRows"
       :sort-col="null"
