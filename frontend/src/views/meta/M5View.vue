@@ -197,15 +197,6 @@ const usRows = computed<TableRow[]>(() => {
 const ctySel = ref<string[]>([]);
 const ctyExcl = ref(false);
 
-const ctyTop5 = computed(() => {
-  void filter.applied.version;
-  const a = cAgg.value;
-  return Object.keys(a)
-    .filter((k) => a[k].spend > 0)
-    .sort((x, y) => a[y].spend - a[x].spend)
-    .slice(0, 5);
-});
-
 const ctyRows = computed<TableRow[]>(() => {
   void filter.applied.version;
   const a = cAgg.value;
@@ -274,7 +265,6 @@ const ctyRows = computed<TableRow[]>(() => {
           clearable
           allow-all
           :label-fn="ctySelLb"
-          :empty-text="() => (ctyTop5.length ? ctyTop5.slice(0, 2).join(',') + (ctyTop5.length > 2 ? ' 等' + ctyTop5.length + '项' : '') : '全部国家')"
           @change="(sel, ex) => { ctySel = sel; ctyExcl = ex; }"
         />
       </template>

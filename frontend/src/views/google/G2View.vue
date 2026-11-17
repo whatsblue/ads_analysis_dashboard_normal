@@ -25,18 +25,6 @@ onMounted(async () => {
 const ctySel = ref<string[]>([]);
 const ctyExcl = ref(false);
 
-const ctyTop5 = computed(() => {
-  void filter.applied.version;
-  const s = filter.applied.start;
-  const e = filter.applied.end;
-  return data.countries
-    .map((ct) => ({ ct, m: data.gCtyRange(ct, s, e) }))
-    .filter((r) => r.m.spend > 0)
-    .sort((x, y) => y.m.spend - x.m.spend)
-    .slice(0, 5)
-    .map((r) => r.ct);
-});
-
 /** 下拉仅列当前筛选范围内有投放（花费>0）的国家——全历史宇宙累计 108 项，含大量已停投国家的全 0 可选项 */
 const ctyItems = computed(() => {
   void filter.applied.version;
@@ -74,7 +62,6 @@ function ctySelLb(k: string): string {
           clearable
           allow-all
           :label-fn="ctySelLb"
-          :empty-text="() => (ctyTop5.length ? ctyTop5.slice(0, 2).join(',') + (ctyTop5.length > 2 ? ' 等' + ctyTop5.length + '项' : '') : '全部国家')"
           @change="(sel, ex) => { ctySel = sel; ctyExcl = ex; }"
         />
       </span>
