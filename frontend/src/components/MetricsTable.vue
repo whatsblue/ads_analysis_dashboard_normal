@@ -512,7 +512,8 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
           </tr>
           <tr>
             <th>{{ props.firstCol }}</th>
-            <th v-for="p in props.pre" :key="p.name" :style="p.w ? { minWidth: p.w } : undefined">{{ p.name }}</th>
+            <!-- p.w 三值锁宽（width/min/max 同值）：防止宽视口下表格 width:100% 拉伸把长文本列分到额外宽度、而 td 内容盒仍被 maxWidth 截断，右侧留出空白带（2026-11-17 用户反馈） -->
+            <th v-for="p in props.pre" :key="p.name" :style="p.w ? { width: p.w, minWidth: p.w, maxWidth: p.w } : undefined">{{ p.name }}</th>
             <th v-if="!props.dateInline">日期</th>
             <th
               v-for="c in cols"
@@ -541,7 +542,7 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
                   <template v-else>{{ props.dateInline ? rangeShort : o.r.label }}</template>
                 </slot>
               </td>
-              <td v-for="(p, pi) in props.pre" :key="p.name" :style="p.w ? { maxWidth: p.w, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined">
+              <td v-for="(p, pi) in props.pre" :key="p.name" :style="p.w ? { width: p.w, maxWidth: p.w, overflow: 'hidden', textOverflow: 'ellipsis' } : undefined">
                 <template v-if="pi === 0 && typeof p.get(o.r as never) !== 'string'">
                   <span v-if="(p.get(o.r as never) as PreCell).expandable" class="exp-tgl" :title="`点击${expanded[(p.get(o.r as never) as PreCell).expKey!] ? '收起' : '展开'}该编号下${(p.get(o.r as never) as PreCell).expCount ? ' ' + (p.get(o.r as never) as PreCell).expCount + ' 条广告' : ''}的细分指标`" @click="toggleExpand((p.get(o.r as never) as PreCell).expKey!)">
                     {{ expanded[(p.get(o.r as never) as PreCell).expKey!] ? '▾' : '▸' }} {{ (p.get(o.r as never) as PreCell).text }}
