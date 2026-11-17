@@ -6,7 +6,7 @@
  * 等 data.init()（manifest/dims/channel）完成后再渲染筛选栏与视图，避免空账号列表闪烁；
  * 失败时顶栏 badge 显示错误、各视图自行兜底重试。
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useDataStore } from '@/stores/data';
 import FilterBar from '@/components/FilterBar.vue';
@@ -90,18 +90,25 @@ function goLv1(to: string): void {
 onMounted(async () => {
   /* 表头页面级吸顶：测量吸顶 topbar 实际高度（筛选栏 wrap 可能两行）注入全局 --topbarH，
      供各表 thead sticky top 精确对齐（ResizeObserver 跟随后续尺寸变化） */
+  const setTopbarH = (): void => {
+    const topbar = document.querySelector('.topbar');
+    if (!topbar) return;
+    document.documentElement.style.setProperty('--topbarH', Math.round(topbar.getBoundingClientRect().height) + 'px');
+    return;
+  };
+  setTopbarH();
   const topbar = document.querySelector('.topbar');
-  if (topbar) {
-    const setH = (): void => document.documentElement.style.setProperty('--topbarH', Math.round(topbar.getBoundingClientRect().height) + 'px');
-    setH();
-    new ResizeObserver(setH).observe(topbar);
-  }
+  if (topbar) new ResizeObserver(setTopbarH).observe(topbar);
   try {
     await data.init();
   } catch {
     /* data.loadError 已记录；视图挂载后各自重试 */
   }
   inited.value = true;
+  /* 兜底：FilterBar（v-if=inited）渲染后 topbar 实际高度已变，RO 之外再补测一次，
+     避免 RO 异常环境下表头藏进 topbar 不透明背景后方 */
+  await nextTick();
+  setTopbarH();
 });
 </script>
 
