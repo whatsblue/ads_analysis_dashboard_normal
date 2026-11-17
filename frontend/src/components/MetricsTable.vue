@@ -142,6 +142,8 @@ watch(
 
 /* ================= 列构造（占比注入，原型 buildCols） ================= */
 const PCT_K = ['spend_pct', 'orders_pct', 'value_pct'] as const;
+/* 比率列：值本身是小数，前端 fmtPct 显示百分比——导出同样走 {pct}（2026-11-17 用户定版导出与前端显示完全一致） */
+const RATIO_K = ['ctr', 'cvr'] as const;
 
 const colsBase = computed<ColDef[]>(() => props.cols ?? (props.mode === 'g' ? G_COLS : STD_COLS));
 
@@ -357,7 +359,8 @@ function doExport(cfg: ExportCfg): void {
       return v == null || isNaN(v) ? '—' : { pct: v };
     }
     const v = d[c.k];
-    return v == null || isNaN(v) ? '—' : v;
+    if (v == null || isNaN(v)) return '—';
+    return RATIO_K.includes(c.k as (typeof RATIO_K)[number]) ? { pct: v } : v;
   }
 
   function rowObj(o: { r: TableRow; d: Record<string, number> }): Record<string, ExpCell> {
@@ -382,9 +385,8 @@ function doExport(cfg: ExportCfg): void {
         if (!t.dateInline) o2['日期'] = d;
         colsBase.value.forEach((c) => {
           const v = dd[c.k];
-          o2[c.name] = PCT_K.includes(c.k as (typeof PCT_K)[number])
-            ? v == null || isNaN(v) ? '—' : { pct: v }
-            : v == null || isNaN(v) ? '—' : v;
+          const asPct = PCT_K.includes(c.k as (typeof PCT_K)[number]) || RATIO_K.includes(c.k as (typeof RATIO_K)[number]);
+          o2[c.name] = v == null || isNaN(v) ? '—' : asPct ? { pct: v } : v;
         });
         arr.push(names.map((n) => o2[n] ?? ''));
       }
@@ -439,7 +441,13 @@ function doExport(cfg: ExportCfg): void {
       if (!t.dateInline) ot['日期'] = dateTxt;
       cols.value.forEach((c) => {
         const v = dt2[c.k];
-        ot[c.name] = PCT_K.includes(c.k as (typeof PCT_K)[number]) ? { pct: 1 } : v == null || isNaN(v) ? '—' : v;
+        const asPct = PCT_K.includes(c.k as (typeof PCT_K)[number]) || RATIO_K.includes(c.k as (typeof RATIO_K)[number]);
+        /* PCT 列总计恒 100%；比率列总计=全量重算比率；其余数值 */
+        ot[c.name] = PCT_K.includes(c.k as (typeof PCT_K)[number])
+          ? { pct: 1 }
+          : asPct
+            ? v == null || isNaN(v) ? '—' : { pct: v }
+            : v == null || isNaN(v) ? '—' : v;
       });
       arr.push(names.map((n) => ot[n] ?? ''));
     }
