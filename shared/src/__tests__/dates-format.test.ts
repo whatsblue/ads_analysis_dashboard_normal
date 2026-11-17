@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, cmpAuto, dateRange, daysBetween } from '../dates';
+import { addDays, addMonths, cmpAuto, dateRange, daysBetween, lastFullWeek } from '../dates';
 import { deltaPct, deltaText, fmtInt, fmtMoney, fmtPct, fmtRoas } from '../format';
 
 describe('日期工具（对齐原型 addDays/addMonths/cmpAuto）', () => {
   it('addDays 跨月', () => {
     expect(addDays('2026-10-28', 5)).toBe('2026-11-02');
     expect(addDays('2026-11-02', -5)).toBe('2026-10-28');
+  });
+
+  it('lastFullWeek：上一个完整自然周（周一～周日，2026-11-17 定版默认窗口）', () => {
+    /* 周二 2026-11-17 → 上周一～上周日（用户示例） */
+    expect(lastFullWeek(new Date(2026, 10, 17))).toEqual({ start: '2026-11-09', end: '2026-11-15' });
+    /* 周一 → 前一天结尾的那一周 */
+    expect(lastFullWeek(new Date(2024, 4, 6))).toEqual({ start: '2024-04-29', end: '2024-05-05' });
+    /* 周日 → 本周未结束，仍返回再前一周 */
+    expect(lastFullWeek(new Date(2026, 10, 15))).toEqual({ start: '2026-11-02', end: '2026-11-08' });
   });
 
   it('addMonths 月末钳制', () => {

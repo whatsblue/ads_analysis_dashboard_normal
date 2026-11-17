@@ -5,6 +5,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { lastFullWeek } from '@ads/shared';
 import { SITES, useFilterStore } from '@/stores/filter';
 import { useDataStore } from '@/stores/data';
 import CalendarPicker from './CalendarPicker.vue';
@@ -140,8 +141,8 @@ function apply(): void {
 }
 
 function reset(): void {
-  const m = data.manifest;
-  if (m) filter.reset(m.range.viewStart, m.range.viewEnd);
+  /* 默认窗口=上一个自然周（2026-11-17 用户定版，与首屏 initDefaults 同源） */
+  filter.reset(lastFullWeek().start, lastFullWeek().end);
   /* 对齐原型 btnReset=location.reload：账号面板活跃渠道/搜索一并回初始（否则大盘空文案残留「Meta 账号」） 2026-11-15 走查定版 */
   accActive.value = '';
   accCur.value = 'meta';

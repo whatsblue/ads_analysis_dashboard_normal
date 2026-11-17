@@ -32,6 +32,13 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((s2d(b).getTime() - s2d(a).getTime()) / DAY);
 }
 
+/** 上一个完整自然周（周一～周日；看板默认日期窗口，2026-11-17 用户定版替代原“最近 7 天”）：today 缺省=本地今天 */
+export function lastFullWeek(today: Date = new Date()): { start: string; end: string } {
+  const day = today.getDay() || 7; /* 周一=1 … 周日=7 */
+  const monday = addDays(d2s(today), 1 - day - 7);
+  return { start: monday, end: addDays(monday, 6) };
+}
+
 export interface CmpRange {
   label: string;
   start: string;

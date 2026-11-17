@@ -30,7 +30,7 @@ import {
   type Metrics,
   type MonthSlice,
 } from '@ads/shared';
-import { dateRange } from '@ads/shared';
+import { dateRange, lastFullWeek } from '@ads/shared';
 import { loadDims, loadDimsAds, loadManifest, loadSlice } from '@/data';
 import { emptyBuckets, mergeSlices, neededMonths } from '@/data/merge';
 import { useFilterStore } from './filter';
@@ -99,8 +99,9 @@ export const useDataStore = defineStore('data', () => {
     if (manifest.value) return;
     const m = await loadManifest();
     manifest.value = m;
-    // 默认区间先就位（不依赖 dims）→ dims 与首屏分片同时发起，避免 dims 3.3MB 串行阻塞分片请求
-    filter.initDefaults(m.range.viewStart, m.range.viewEnd);
+    // 默认区间先就位（不依赖 dims）→ dims 与首屏分片同时发起，避免 dims 3.3MB 串行阻塞分片请求；
+// 默认窗口=上一个自然周（2026-11-17 用户定版，替代 manifest 数据窗口）
+    filter.initDefaults(lastFullWeek().start, lastFullWeek().end);
     const missing = needMonths().filter((mm) => !slices.has(mm));
     if (missing.length) rangeReady.value = false;
     try {
