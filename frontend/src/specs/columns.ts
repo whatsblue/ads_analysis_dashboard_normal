@@ -195,10 +195,10 @@ export const G_GROUP_DEF: GroupMap = [
 
 /** 表头口径提示（悬浮显示；std=Meta 文案，g=Google 文案，互不出现对方渠道内容） */
 export const TH_TIP: Record<string, { std: string; g: string }> = {
-  spend: { std: '已花费金额(USD)：Meta Ads 后台', g: '已花费金额(USD)：Google Ads 后台' },
+  spend: { std: '已花费金额（Meta 广告后台）', g: '已花费金额(USD)：Google Ads 后台' },
   impressions: { std: '展示次数（Meta 广告后台）', g: '展示次数（Google Ads 后台）' },
   clicks: { std: '点击量：Meta 广告后台链接点击量', g: '点击量（Google Ads 点击）' },
-  orders: { std: '订单：Meta 广告后台购物次数（7天点击+1天浏览）', g: '订单：Shopify 后台订单（Google 归因）' },
+  orders: { std: '购物次数（Meta 广告后台）', g: '订单：Shopify 后台订单（Google 归因）' },
   value: { std: '转化价值：Meta 广告后台', g: '转化价值：Shopify 归因收入' },
   cpm: { std: 'CPM＝花费÷展示×1000', g: 'CPM＝花费÷展示×1000' },
   cpc: { std: 'CPC＝花费÷点击量', g: 'CPC＝花费÷点击量' },
