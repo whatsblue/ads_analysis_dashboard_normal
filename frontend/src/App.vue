@@ -99,6 +99,11 @@ onMounted(async () => {
   setTopbarH();
   const topbar = document.querySelector('.topbar');
   if (topbar) new ResizeObserver(setTopbarH).observe(topbar);
+  /* 加固：某些环境下 RO 回调不可靠（如隐藏窗口帧门控），resize/回到可见时补测一次 */
+  window.addEventListener('resize', setTopbarH);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') setTopbarH();
+  });
   try {
     await data.init();
   } catch {
