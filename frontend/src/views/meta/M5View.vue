@@ -5,7 +5,7 @@
  * + US/Non-US 拆分两行表 + 国家对比明细（默认花费 Top5）。
  * 趋势图 2026-11-15 用户定版：去单次加购/单次结帐；上限 2 项，先点柱状（左轴）后点折线（右轴）；颜色按国家分组（同国柱线同色）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { addMetrics, dateRange, derive, zero, type Metrics } from '@ads/shared';
 import { useDataStore } from '@/stores/data';
 import { useFilterStore } from '@/stores/filter';
@@ -44,8 +44,20 @@ function onEsc(e: KeyboardEvent): void {
 /* ================= 趋势对比（原型 renderM5T；2026-11-14 用户定版：去卡头粒度切换固定按日，指标支持多选多线） ================= */
 
 const trendMs = ref<string[]>(['spend', 'roas']);
-const trendA = ref('United States');
-const trendB = ref('非美国');
+
+/** 单选 Shoplazza 站点（2026-11-17 用户定版：该站点下隐藏 US & Non-US 对比明细，趋势对比默认地区改为 AE/SA） */
+const isSls = computed(() => filter.applied.sites.length === 1 && filter.applied.sites[0] === 'Shoplazza');
+
+const trendA = ref(isSls.value ? 'AE' : 'United States');
+const trendB = ref(isSls.value ? 'SA' : '非美国');
+/* 切换销售站点时重置为该站点默认对比地区（Shoplazza=AE/SA，其余=US/Non-US） */
+watch(
+  () => filter.applied.sites.join(','),
+  () => {
+    trendA.value = isSls.value ? 'AE' : 'United States';
+    trendB.value = isSls.value ? 'SA' : '非美国';
+  },
+);
 const ddOpen = ref<'' | 'm' | 'a' | 'b'>('');
 
 function ctyLbl(nm: string): string {
@@ -235,7 +247,9 @@ const ctyRows = computed<TableRow[]>(() => {
       <div class="card-b"><BaseChart :option="trendOpt" /></div>
     </div>
 
+    <!-- Shoplazza 站点下隐藏（2026-11-17 用户定版）：US/Non-US 拆分对该站点无意义 -->
     <MetricsTable
+      v-if="!isSls"
       tid="m5b"
       title="US & Non-US 对比明细"
       first-col="分类"

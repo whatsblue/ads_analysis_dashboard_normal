@@ -20,6 +20,9 @@ const data = useDataStore();
 const filter = useFilterStore();
 const ready = ref(false);
 
+/** 单选 Shoplazza 站点（2026-11-17 用户定版：该站点下隐藏素材子分类明细，子分类枚举仅 Shopify 口径完整） */
+const isSls = computed(() => filter.applied.sites.length === 1 && filter.applied.sites[0] === 'Shoplazza');
+
 onMounted(async () => {
   await data.init();
   await data.ensure('metaCreative', 'metaAd');
@@ -237,8 +240,8 @@ function topDayFn(r: TableRow, d: string): Metrics {
         </template>
       </MetricsTable>
 
-      <!-- 2026-11-15 用户定版：标题/筛选与两个明细表同卡，表明筛选作用于下方两表（原型 m4sub 单卡双表结构） -->
-      <div class="card">
+      <!-- 2026-11-15 用户定版：标题/筛选与两个明细表同卡，表明筛选作用于下方两表（原型 m4sub 单卡双表结构）；Shoplazza 站点下隐藏 -->
+      <div v-if="!isSls" class="card">
         <div class="card-h">
           <span>素材子分类明细</span>
           <span class="seg mini" style="margin-left: 12px">
