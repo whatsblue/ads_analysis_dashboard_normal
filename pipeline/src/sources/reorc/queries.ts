@@ -250,8 +250,8 @@ GROUP BY dt, age_group`
   },
   {
     id: 'gmv',
-    desc: '整站 GMV（易仓订单明细 status=4 已付款，按付款日期；与观远 BI 大盘总览逐位一致，2026-11-16 对账定版）',
-    sql: (p) => `SELECT DATE_FORMAT(platform_paid_date, '%Y-%m-%d') AS date, LOWER(platform) AS site, SUM(CAST(amountpaid AS DOUBLE)) AS amount, SUM(product_count) AS cnt
+    desc: '整站 GMV（易仓订单明细 status=4 已付款，按付款日期；行级 ROUND 2 位后求和——观远 BI 数据集对金额逐行舍入，2026-11-17 对账定版消除 0.87 残差）',
+    sql: (p) => `SELECT DATE_FORMAT(platform_paid_date, '%Y-%m-%d') AS date, LOWER(platform) AS site, SUM(ROUND(CAST(amountpaid AS DOUBLE), 2)) AS amount, SUM(product_count) AS cnt
 FROM data_warehouse_prod.ods_eccang_order
 WHERE status = 4 AND platform_paid_date >= '{{START}}' AND platform_paid_date < DATE_ADD('{{END}}', INTERVAL 1 DAY)
 GROUP BY DATE_FORMAT(platform_paid_date, '%Y-%m-%d'), LOWER(platform)`
