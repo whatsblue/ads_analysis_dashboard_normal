@@ -927,6 +927,8 @@ table.matrix {
 }
 .stk2 .matrix thead tr:not(.gtr) th:nth-child(2) {
   z-index: 9;
+  /* 表头随表头标准底色（var(--head)），否则与 Campaign ID 列吸顶底色不一致（2026-11-17 用户反馈） */
+  background: var(--head);
 }
 .stk2 .matrix tr.cmp-d td:nth-child(2) {
   background: #f6f9ff;
