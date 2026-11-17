@@ -852,6 +852,13 @@ table.matrix {
 .tbl-scroll .matrix thead tr:not(.gtr) th:first-child {
   z-index: 9;
 }
+/* 单环比周期压缩列距（fitCols，2026-11-17 m4a 素材类型明细）：16 列适配视口宽免横向滚动，
+   总计行全部列一眼可见；多环比周期移除本类恢复自然列宽出现滑块 */
+.tbl-fit .matrix th,
+.tbl-fit .matrix td {
+  padding-left: 6px;
+  padding-right: 6px;
+}
 .matrix td:first-child {
   background: #fff;
 }

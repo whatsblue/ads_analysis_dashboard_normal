@@ -227,6 +227,7 @@ function topDayFn(r: TableRow, d: string): Metrics {
         first-col="素材类型"
         :rows="typeRows"
         link-first
+        fit-cols
         first-tip="点击下钻查看该类型 Top 素材"
         :day-fn="(r, d) => data.metaDimDate('ctype', d)[String(r.code)] || zero()"
         @link="enterDrill"

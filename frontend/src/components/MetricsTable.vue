@@ -75,6 +75,8 @@ const props = withDefaults(
     dayFn?: ((r: TableRow, d: string) => Metrics | null) | null;
     /** 环比格 hover 归因（大盘三表） */
     attrOn?: boolean;
+    /** 单环比周期时压缩列距适配视口宽（总计行免横向滚动完整可见）；多周期保留滑块（2026-11-17 m4a） */
+    fitCols?: boolean;
   }>(),
   {
     mode: 'std',
@@ -98,6 +100,7 @@ const props = withDefaults(
     expOf: null,
     dayFn: null,
     attrOn: false,
+    fitCols: false,
   },
 );
 
@@ -426,11 +429,13 @@ function doExport(cfg: ExportCfg): void {
 const rangeTxt = computed(() => filter.applied.start + ' ~ ' + filter.applied.end);
 const ncol = computed(() => 1 + (props.pre?.length ?? 0) + (props.dateInline ? 0 : 1) + cols.value.length);
 const cmpOn = computed(() => filter.applied.cmpOn);
+/* fitCols：仅单环比周期（或未开环比）压缩列距；多周期时移除压缩类恢复自然列宽出现滑块 */
+const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length : 0));
 </script>
 
 <template>
   <!-- noCard：素材子分类单卡双表场景，嵌在外层 .card 内仅去掉卡片外壳（原型 m4sub 结构） -->
-  <div ref="tblRoot" :class="props.noCard ? undefined : 'card'">
+  <div ref="tblRoot" :class="[props.noCard ? undefined : 'card', props.fitCols && cmpCount <= 1 ? 'tbl-fit' : '']">
     <div class="card-h" :style="props.headStyle || undefined">
       <!-- head-pre：卡头最左（下钻返回按钮）；head-note：紧贴标题的说明（原型 m4a 注释） -->
       <slot name="head-pre"></slot>
