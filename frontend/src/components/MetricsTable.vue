@@ -12,7 +12,7 @@ const PCT_STATE = new Map<string, boolean>();
  * - 总计行（Σ求和 + 比率重算）；展开行组（素材编号 expOf）；首列下钻链接（linkFirst）
  * - 环比格 hover 归因（attrOn，浮层由 App 级 AttrTip 渲染）；导出（ExportModal）
  */
-import { computed, ref, useSlots, watch } from 'vue';
+import { computed, onMounted, ref, useSlots, watch } from 'vue';
 import { cmpHL, dateRange, derive, deriveG, HL_CMP, HL_TH, sumMetrics, type Metrics } from '@ads/shared';
 import { deltaPct } from '@ads/shared';
 import { G_COLS, G_GROUP_DEF, METRIC_GROUPS, PCT_COLS, PCT_DEF, STD_COLS, TH_TIP, type ColDef, type GroupMap } from '@/specs/columns';
@@ -102,6 +102,16 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ link: [label: string] }>();
+
+/* 表头页面级吸顶：挂载后测量分组行实际高度注入本表根节点 --gtrH（列名行 sticky top=--topbarH+--gtrH） */
+const tblRoot = ref<HTMLElement | null>(null);
+onMounted(() => {
+  const gtr = tblRoot.value?.querySelector('.matrix thead tr.gtr');
+  if (!tblRoot.value || !gtr) return;
+  const setH = (): void => tblRoot.value!.style.setProperty('--gtrH', gtr.getBoundingClientRect().height + 'px');
+  setH();
+  new ResizeObserver(setH).observe(gtr);
+});
 
 const slots = useSlots();
 
@@ -420,7 +430,7 @@ const cmpOn = computed(() => filter.applied.cmpOn);
 
 <template>
   <!-- noCard：素材子分类单卡双表场景，嵌在外层 .card 内仅去掉卡片外壳（原型 m4sub 结构） -->
-  <div :class="props.noCard ? undefined : 'card'">
+  <div ref="tblRoot" :class="props.noCard ? undefined : 'card'">
     <div class="card-h" :style="props.headStyle || undefined">
       <!-- head-pre：卡头最左（下钻返回按钮）；head-note：紧贴标题的说明（原型 m4a 注释） -->
       <slot name="head-pre"></slot>

@@ -88,6 +88,14 @@ function goLv1(to: string): void {
 }
 
 onMounted(async () => {
+  /* 表头页面级吸顶：测量吸顶 topbar 实际高度（筛选栏 wrap 可能两行）注入全局 --topbarH，
+     供各表 thead sticky top 精确对齐（ResizeObserver 跟随后续尺寸变化） */
+  const topbar = document.querySelector('.topbar');
+  if (topbar) {
+    const setH = (): void => document.documentElement.style.setProperty('--topbarH', Math.round(topbar.getBoundingClientRect().height) + 'px');
+    setH();
+    new ResizeObserver(setH).observe(topbar);
+  }
   try {
     await data.init();
   } catch {
