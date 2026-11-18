@@ -58,6 +58,7 @@ jobs:
       npm_config_minimum_release_age: '0'
     outputs:
       changed: ${{ steps.data.outputs.changed }}
+      sha: ${{ steps.push.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -100,13 +101,25 @@ jobs:
           fi
 
       - name: Commit data
+        id: push
         if: steps.data.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/public/data
           git commit -m "chore(data): auto update via update-data workflow [skip ci]"
-          git push
+          # push 重试 3 次：runner 出口对 github.com 间歇阻断、以及人工 push 并行推进 main
+          # 造成的瞬时失败/非快进（2026-11-17 Run#30 事故，commit 后 push 失败致数据丢失）
+          for i in 1 2 3; do
+            if git push; then
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "push 第 $i 次失败，30s 后 rebase 追平重试"
+            sleep 30
+            git pull --rebase origin main || true
+          done
+          exit 1
 
       - name: Alert on failure
         if: failure()
@@ -168,7 +181,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # 必须显式 checkout update job 刚 push 的数据 commit：默认 checkout github.sha =
+      # schedule 触发时的 main 快照，不含本 run 推送的数据，会"部署成功但上线旧数据"
+      # （2026-11-18 事故：部署了 a119aec 旧数据，11-17 数据未上线，9:00 看板全 0）
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.update.outputs.sha }}
 
       # action-setup@v4 在当前 runner 上拉取 pnpm 失败，改用 npm 全局安装（runner 自带 node/npm）
       - name: Setup pnpm
@@ -184,6 +202,19 @@ jobs:
 
       - name: Build frontend
         run: pnpm --filter frontend build
+
+      # schedule 批次上线前校验数据新鲜度：manifest 必须覆盖北京昨日（T+1），
+      # 防止"部署成功但部署的是旧数据"的静默故障；workflow_dispatch 回填历史窗口时跳过
+      - name: Verify data freshness
+        if: github.event_name == 'schedule'
+        run: |
+          expected=$(TZ=Asia/Shanghai date -d yesterday +%F)
+          actual=$(node -e "console.log(require('./frontend/dist/data/manifest.json').range.max)")
+          echo "期望覆盖北京昨日=$expected，实际=$actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::数据未覆盖北京昨日 $expected（actual=$actual）：拉数/提交/部署链路异常"
+            exit 1
+          fi
 
       # Pages 站点已通过 API 启用(build_type=workflow)，此处仅读取配置
       - uses: actions/configure-pages@v5
