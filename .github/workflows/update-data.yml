@@ -7,7 +7,8 @@ name: Update Data
 # 保证白天任意时段打开看板与 BI 实时数据的偏差不超过半天。
 # 全量（REORC_START 默认 2025-01-01 起，含 2025 历史年）幂等重生成：历史月份迟到回传自然收敛，
 # 月分片 months/<YYYY-MM>.json 前端按需加载。
-# 依赖 Secrets：REORC_TOKEN（必需）/ REORC_BASE_URL（可选，默认 api.cn.reorc.cloud）
+# 依赖 Secrets：REORC_OPENAPI_KEY（推荐主通道，数据服务个人 API 密钥，长期有效）/ REORC_TOKEN（兜底，登录 JWT 约 7 天过期）/
+# REORC_BASE_URL（可选，默认 api.cn.reorc.cloud）
 # 见 docs/SECRETS.md
 on:
   schedule:
@@ -52,7 +53,9 @@ jobs:
   update:
     name: 拉数 + 校验 + 提交
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # 全历史 openapi 通道实测 ~3.75h（2026-11-25：旺季月多毛刺周，每毛刺周二分降级 ~2min）；
+    # 公开仓库 Actions 不限时长，240 留足余量（单 job 平台上限 360）
+    timeout-minutes: 240
     env:
       # pnpm 12 供应链新政：lockfile 已冻结版本，豁免发布年龄拦截保 CI 稳定
       npm_config_minimum_release_age: '0'
@@ -128,8 +131,11 @@ jobs:
       - name: Run pipeline (monthly slices)
         env:
           REORC_BASE_URL: ${{ secrets.REORC_BASE_URL }}
+          # 主通道：开放 API（数据服务 preview，个人 API 密钥长期有效，摆脱登录 token 过期依赖）；
+          # 缺失时 cli 自动回退 REORC_TOKEN sql-query 通道
+          REORC_OPENAPI_KEY: ${{ secrets.REORC_OPENAPI_KEY }}
           REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
-          # 取数目标：selectdb 连接的 data_warehouse_prod（广告聚合层），SQL 内仍带 schema 前缀双保险
+          # 取数目标（sql-query 兜底通道）：selectdb 连接的 data_warehouse_prod（广告聚合层），SQL 内仍带 schema 前缀双保险
           REORC_CONNECTION_NAME: selectdb
           REORC_DATABASE: data_warehouse_prod
           # v3 月度分片：REORC_START~REORC_END 按自然月逐月拉取；schedule 触发时 inputs 为空，
@@ -193,9 +199,10 @@ jobs:
               `- 失败时间：${new Date().toISOString()}`,
               '',
               '常见原因：',
-              '1. `REORC_TOKEN` 过期 → 本地终端执行 `reorc-cli login` 刷新后更新 Secrets（见 docs/SECRETS.md）',
-              '2. ReOrc 平台数据模型未就绪或口径变更 → 检查 preview-data 输出',
-              '3. 云端 runner 网络可达性 → 手动 Run workflow 复现排查',
+              '1. 开放 API 鉴权失败（REORC_OPENAPI_KEY 缺失/失效）→ 数据服务页「如何调用 API?」弹窗重新复制密钥并更新 Secrets',
+              '2. `REORC_TOKEN` 过期（兜底通道）→ 本地终端执行 `reorc-cli login` 刷新后更新 Secrets（见 docs/SECRETS.md）',
+              '3. ReOrc 平台数据模型未就绪或口径变更 → 检查 preview-data 输出',
+              '4. 云端 runner 网络可达性 → 手动 Run workflow 复现排查',
               '',
               '修复并确认成功后请关闭本 issue。',
             ].join('\n');

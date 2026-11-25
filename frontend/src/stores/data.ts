@@ -141,13 +141,13 @@ export const useDataStore = defineStore('data', () => {
   }
 
   /** 空闲时后台预取其余月分片与 adList（仅 warm HTTP 缓存，不重建内存桶：
-   *  切换历史区间时 ensureForRange 命中缓存秒回，parse+merge 延迟到真正需要时；预取失败静默，用时增量加载兑底 */
+   *  切换历史区间时 ensureForRange 命中缓存秒回，parse+merge 延迟到真正需要时；预取失败静默，用时增量加载兜底 */
   function prefetchRest(): void {
     const warm = () => {
       for (const mm of manifest.value?.months ?? []) {
-        if (!slices.has(mm)) void loadSlice(mm).catch(() => { /* 兑底 */ });
+        if (!slices.has(mm)) void loadSlice(mm).catch(() => { /* 兜底 */ });
       }
-      void loadDimsAds().catch(() => { /* 兑底 */ });
+      void loadDimsAds().catch(() => { /* 兜底 */ });
     };
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
       (window as unknown as { requestIdleCallback: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback(warm, { timeout: 8000 });

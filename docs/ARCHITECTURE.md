@@ -119,8 +119,10 @@
 ## 7. 数据管道设计（痛点 3：自动更新）
 
 ```
-cli.ts --source=reorc（默认）
-  → sources/reorc/：ReOrc API 通道（client.ts 请求/分页、queries.ts 19 主题 SQL、monthly.ts 月度分片+queryWindow 自适应二分、rows.ts 行→契约桶），拉取各维度源数据
+cli.ts（PIPELINE_MODE=monthly）
+  → sources/reorc/：ReOrc 双通道拉数（按凭证自动选择）
+      主通道 openapi.ts：数据服务 preview（Bearer REORC_OPENAPI_KEY 个人密钥，长期）
+      兜底 monthly.ts：sql-query（Bearer REORC_TOKEN 登录 JWT）+ queries.ts 19 主题 SQL + 二分翻页
   → build/aggregate.ts：源数据 → 契约桶（对齐原型 extract_real.py 口径：
       滚动重算最近 10 个自然日；历史区间快照不动）
   → validate.ts：契约 schema + 交叉自洽（Σ账号=渠道、Σ组合=Google 渠道、A=Σ站点）
@@ -130,23 +132,34 @@ cli.ts --source=reorc（默认）
 
 - **通道抽象**：`Source` 接口（拉取原始行）→ reorc / db / rdfile 三实现。切换通道只改 `--source` 参数，聚合口径层复用。
 - **迁移期策略**：`--source=rdfile` 把原型 `ads_real.js` 转为契约 JSON（Phase 0 fixture 即此产物），前端开发不被数据源阻塞；ReOrc 凭据就绪后切 `reorc`。
-- **凭据**：`REORC_BASE_URL` / `REORC_TOKEN` 存 GitHub Secrets；token 失效时管道以明确错误码失败并开 Issue 指导刷新；拉数前另有 token 剩余有效期预警（<48h 自动开 issue 提醒续期，2026-11-25 断更 4 天事故防复发）。
+- **凭据**：`REORC_OPENAPI_KEY`（主通道，数据服务个人 API 密钥，长期有效、与登录态无关）与 `REORC_TOKEN`（兜底，登录 JWT 约 7 天过期）存 GitHub Secrets；主通道鉴权失败时管道以明确错误码失败并开 Issue 指导换钥；token 通道另有剩余有效期预警（<48h 自动开 issue 提醒续期，2026-11-25 断更 4 天事故防复发）。
 
 ### 7.1 取数链路与来源（2026-11-25 补记定版）
 
 ```
 GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 三批次）
   → pipeline 包启动（Node 22 + tsx）
-  → ReOrc 平台 REST API（HTTPS api.cn.reorc.cloud/api，Bearer REORC_TOKEN）
-      ① discover：按连接名 selectdb 解析 connection_id（GET 连接列表）
-      ② POST /conn/connections/sql-query
+  → 拉数双通道（cli.ts monthly 分支按凭证自动选择）：
+      ① 主通道（REORC_OPENAPI_KEY 存在时）：ReOrc 开放 API 数据服务
+         POST /api/data-service/open/services/{id}/preview
+         body = { filters:[dt time_between], sorts, page, page_size:10000 }
+         9 个数据服务（SQL 由 queries.ts 口径派生，平台侧 GROUP BY 预聚合）；
+         月窗口按周切片拉取（大服务单月超 nginx 60s 网关硬限，实测 2026-11-25：
+         campaign 单月 504、单周 2.5s）；慢窗口重试耗尽自动二分降级
+         （splitRangeHalf：结构性慢查询单周也 504 时拆 4+3 天即可恢复，
+         实测 creative 2025-07 中间三周均靠二分拉回；二分子窗口用零重试
+         客户端直达——结构性慢查询重试必然再次超时，省时 ~200s/毛刺周）
+         → openapi.ts 主题适配 → 契约行
+      ② 兜底通道（仅 REORC_TOKEN）：平台 REST API（Bearer JWT）
+         discover：按连接名 selectdb 解析 connection_id（GET 连接列表）
+         POST /conn/connections/sql-query
          body = { connection_id, sql, env_id, database: data_warehouse_prod, limit, offset }
-  → 平台以自身登记的 selectdb 连接（Doris 协议）代为执行仓库内 SQL，分页返回结果集（5000 行/页）
+         平台以自身登记的 selectdb 连接（Doris 协议）代为执行仓库内 SQL，分页返回（5000 行/页）
   → pipeline：zod 契约校验 → shared 派生计算 → 月度分片 JSON + manifest
   → commit main → Pages 部署 → 前端按需懒加载
 ```
 
-机制要点：**SQL 文本维护在仓库**（queries.ts 模板，列别名即契约），平台仅代为执行；**数据库凭据登记在平台的「连接」内**，本链路全程只持有平台 token（短效 JWT，约 7 天）。本地核对走同一通道（reorc-cli `global-connections query` 为同一 sql-query 能力）。
+机制要点：**口径 SQL 维护在仓库**（queries.ts 模板与 openapi.ts 服务/度量映射常量，两通道同一契约），主通道服务 SQL 由 queries.ts 派生并部署在平台数据服务（个人 API 密钥鉴权，与登录态解耦）；兜底通道平台仅代为执行仓库内 SQL；数据库凭据登记在平台的「连接」内，两通道均不持有数仓账密。本地核对走同一入口（reorc-cli）。
 
 数仓数据来源（`data_warehouse_prod`，ReOrc 上游建模管道产出）：
 
@@ -166,7 +179,7 @@ GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 三批次）
 | 数据存储 | SelectDB 数仓 `data_warehouse_prod` | 上表各主题基础表；本仓库只读，不存任何派生指标 |
 | 数据快照 | 仓库 `frontend/public/data/` | 管道产出的月度分片 JSON（19 主题×月）+ manifest/dims，前端唯一数据源 |
 | 拉取逻辑 | `pipeline/src/sources/reorc/queries.ts` | 每主题 SQL 模板 + 列别名（别名=契约的一部分）+ 口径映射（clicks=link_clicks、orders=unified_orders 等） |
-| 管道逻辑 | `pipeline/src/sources/reorc/{monthly,rows}.ts`、`validate.ts`、`build/emit.ts` | 行映射、月度分片与二分翻页、契约校验、原子写盘 |
+| 管道逻辑 | `pipeline/src/sources/reorc/{openapi,monthly,rows}.ts`、`validate.ts`、`build/emit.ts` | 行映射、开放 API 周切片与主题适配、月度分片与二分翻页、契约校验、原子写盘 |
 | 口径逻辑 | `shared/src/metrics.ts` | 派生指标（ROAS/CVR/CPA/AOV 等）唯一实现，前端与管道共用 |
 | 展示逻辑 | `frontend/src/{specs,views,components}` | 仅展示层聚合与配置驱动渲染，不算口径 |
 
@@ -177,14 +190,14 @@ GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 三批次）
 3. **统一入口与审计**：连接、账号、审计由平台统一管理（平台网页 / reorc-cli / CI 同一入口同一权限体系），旁路直连无审计。
 4. **只读网关**：sql-query 为平台只读查询通道（限流/超时/分页协议由平台封装）；直连则是全权限数据库连接。
 
-代价与兜底：token 周级过期是本链路唯一运维点 → 已有「<48h 过期预警 issue + 失败自动告警 + 部署前新鲜度校验拒发旧数据」三重防线（2026-11-25 断更 4 天事故后补齐，根因即 token 过期）。
+代价与兜底：sql-query 通道登录 JWT 周期过期曾致断更（2026-11-25 事故）→ 已由开放 API 主通道根治（个人密钥长期有效，与登录态解耦）；token <48h 预警 + 失败自动告警 + 部署前新鲜度校验三重防线保留兜底。开放 API 通道的已知约束：preview 服务端为全量聚合外层过滤执行，大服务必须周切片（nginx 60s 网关限）；time_between 上界为 datetime 语义，裸日期（'YYYY-MM-DD'）被解析为当天 00:00:00 会丢窗口尾日全天数据（对账实锤后拉取层已显式补 ' 23:59:59'）；个别周窗口是结构性慢查询（重试无用），拉取层对网络超时/429/5xx 重试耗尽后自动二分窗口递归拉取（子窗口零重试直达），单日窗口仍失败才报错。
 
 ## 8. CI/CD 设计
 
 | workflow | 触发 | 步骤 |
 |---|---|---|
 | `ci.yml` | PR / push（非 main 的任意分支） | install → typecheck → vitest → build |
-| `update-data.yml` | cron 三批次（北京 05:00 / 07:30 / 21:00）+ workflow_dispatch | token 预警 → 拉数校验 → 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
+| `update-data.yml` | cron 三批次（北京 05:00 / 07:30 / 21:00）+ workflow_dispatch | token 预警 → 拉数校验（开放 API 主 + sql-query 兜底）→ 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
 | `deploy.yml` | push main（前端共享/管道代码变更）、手动 | pnpm build → actions/upload-pages-artifact → actions/deploy-pages |
 
 Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite `base` 配置子路径）。

@@ -139,10 +139,15 @@ function sliceOf(ds: RawDataset, month: string): MonthSlice {
 }
 
 export interface FetchMonthlyOptions {
-  client: ReorcClient;
-  connectionId: string;
-  database: string;
-  envId: string;
+  client?: ReorcClient;
+  connectionId?: string;
+  database?: string;
+  envId?: string;
+  /**
+   * 开放 API 行提供者（2026-11-25 新增）：提供时按窗口产出主题契约行，
+   * 跳过 sql-query 拉取（无需 REORC_TOKEN）；未提供时 client/connectionId/database/envId 必填。
+   */
+  rowsByTopic?: (win: MonthWindow) => Promise<RowsByTopic>;
   /** 回填起点（含；默认 2026-01-01 由 cli 注入） */
   start: DateStr;
   /** 回填终点（含；默认北京昨日） */
@@ -169,11 +174,29 @@ export async function fetchMonthly(opts: FetchMonthlyOptions): Promise<MonthlyPa
   let dims: Dims | null = null;
 
   for (const win of wins) {
-    const rows: RowsByTopic = {};
-    for (const topic of REORC_QUERIES) {
-      const result = await queryWindow(opts.client, topic, opts.connectionId, opts.database, opts.envId, win.start, win.end, SQL_QUERY_PAGE_SIZE_DEFAULT);
-      rows[topic.id] = result;
-      log(`${win.month} ${topic.id}：${result.length} 行`);
+    let rows: RowsByTopic;
+    if (opts.rowsByTopic) {
+      rows = await opts.rowsByTopic(win);
+      for (const [id, v] of Object.entries(rows)) log(`${win.month} ${id}：${v?.length ?? 0} 行`);
+    } else {
+      if (!opts.client || !opts.connectionId || !opts.database || !opts.envId) {
+        throw new Error('fetchMonthly：未提供 rowsByTopic 时需要 client/connectionId/database/envId');
+      }
+      rows = {};
+      for (const topic of REORC_QUERIES) {
+        const result = await queryWindow(
+          opts.client,
+          topic,
+          opts.connectionId,
+          opts.database,
+          opts.envId,
+          win.start,
+          win.end,
+          SQL_QUERY_PAGE_SIZE_DEFAULT,
+        );
+        rows[topic.id] = result;
+        log(`${win.month} ${topic.id}：${result.length} 行`);
+      }
     }
     const ds = rowsToDataset(rows, { genAt, start: win.start, end: win.end, scope: REORC_SCOPE });
     // 月内校验：伪 manifest 补 months 字段满足 v3 Schema；range=该月窗口（数据日期天然月内）

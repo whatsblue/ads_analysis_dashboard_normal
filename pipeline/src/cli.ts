@@ -17,7 +17,8 @@ import { createDbSource } from './sources/db';
 import { createReorcClient } from './sources/reorc/client';
 import { discoverReorcTarget, extractDatabaseNames } from './sources/reorc/discover';
 import { beijingYesterday, createReorcSource, REORC_BASE_URL_DEFAULT } from './sources/reorc';
-import { fetchMonthly } from './sources/reorc/monthly';
+import { fetchMonthly, type MonthlyPayload } from './sources/reorc/monthly';
+import { makeMonthlyRowsProvider } from './sources/reorc/openapi';
 import { createRdFileSource } from './sources/rdfile';
 import type { Source, SourceKind } from './sources/types';
 import { emitDataset, emitMonthly } from './build/emit';
@@ -201,27 +202,43 @@ async function main() {
   );
 
   // v3 月度分片模式：REORC_START（默认 2026-01-01）~REORC_END（默认北京昨日）按自然月拉取
+  // 通道选择（2026-11-25）：有 REORC_OPENAPI_KEY 走开放 API 主通道（无需登录 token，不受 token 过期影响）；
+  // 否则回退 sql-query 通道（REORC_TOKEN + 连接自动发现）
   if (args.monthly) {
-    const baseUrl = process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
-    const token = process.env.REORC_TOKEN;
-    if (!token) {
-      throw new Error('缺少 REORC_TOKEN。请设置环境变量；token 获取：本地终端 reorc-cli login，或 DevTools 复制 authorization 头。');
-    }
-    const client = createReorcClient({ baseUrl, token });
-    const target = await discoverReorcTarget(client, (m) => console.log(`[pipeline] ${m}`));
-    console.log(`[pipeline] 目标：env=${target.envName} conn=${target.connectionName} db=${target.database}`);
     const start = process.env.REORC_START || '2026-01-01';
     const end = process.env.REORC_END || beijingYesterday();
     console.log(`[pipeline] 月度回填：${start} ~ ${end}`);
 
-    const payload = await fetchMonthly({
-      client,
-      connectionId: target.connectionId,
-      database: target.database,
-      envId: target.envId,
-      start,
-      end,
-    });
+    const apiKey = process.env.REORC_OPENAPI_KEY;
+    let payload: MonthlyPayload;
+    if (apiKey) {
+      console.log('[pipeline] 拉取通道：开放 API（数据服务 preview，无需 REORC_TOKEN）');
+      payload = await fetchMonthly({
+        start,
+        end,
+        rowsByTopic: makeMonthlyRowsProvider({ apiKey, log: (m) => console.log(`[pipeline][openapi] ${m}`) }),
+      });
+    } else {
+      const baseUrl = process.env.REORC_BASE_URL || REORC_BASE_URL_DEFAULT;
+      const token = process.env.REORC_TOKEN;
+      if (!token) {
+        throw new Error(
+          '缺少拉数凭证：请设置 REORC_OPENAPI_KEY（推荐，长期个人 API 密钥）或 REORC_TOKEN（登录 JWT，约 7 天过期）。',
+        );
+      }
+      console.log('[pipeline] 拉取通道：sql-query（登录 token 兜底）');
+      const client = createReorcClient({ baseUrl, token });
+      const target = await discoverReorcTarget(client, (m) => console.log(`[pipeline] ${m}`));
+      console.log(`[pipeline] 目标：env=${target.envName} conn=${target.connectionName} db=${target.database}`);
+      payload = await fetchMonthly({
+        client,
+        connectionId: target.connectionId,
+        database: target.database,
+        envId: target.envId,
+        start,
+        end,
+      });
+    }
     console.log(
       `[pipeline] 拉取完成：genAt=${payload.manifest.genAt} range=${payload.manifest.range.min}~${payload.manifest.range.max} 分片=${payload.slices.length}`,
     );

@@ -8,10 +8,17 @@
 
 | Secret | 必填 | 说明 |
 |---|---|---|
-| `REORC_TOKEN` | ✅ | ReOrc 平台访问令牌，数据管道（`update-data.yml`）拉数用 |
+| `REORC_OPENAPI_KEY` | ✅ | ReOrc 数据服务个人 API 密钥，拉数**主通道**（长期有效，与登录态无关） |
+| `REORC_TOKEN` | ⬜ | ReOrc 平台访问令牌，拉数**兜底通道**（登录 JWT，约 7 天过期；主通道失效时自动回退到此） |
 | `REORC_BASE_URL` | ❌ | 平台 API 地址，默认 `https://api.cn.reorc.cloud/api`，仅私有化部署时需要 |
 
-### REORC_TOKEN 获取与刷新
+### REORC_OPENAPI_KEY 获取与更新（主通道）
+
+ReOrc 平台 → 项目 → **数据服务** → 「如何调用 API?」弹窗 → 复制**个人 API 密钥** → 更新到 Secrets（`Settings → Secrets and variables → Actions → REORC_OPENAPI_KEY`）。
+
+密钥为用户级：一个密钥可调用本项目全部数据服务（端点以 `data_service_id` 区分）。失效/换钥后管道失败并自动开告警 issue；更新后手动 Run 一次 workflow 验证。
+
+### REORC_TOKEN 获取与刷新（兜底通道）
 
 方式 A（推荐）：本地终端执行
 
@@ -24,7 +31,7 @@ reorc-cli login
 
 方式 B：浏览器登录 ReOrc 平台 → DevTools → Network → 任一 `/api` 请求 → 复制 `authorization` 请求头（带不带 `Bearer` 前缀均可）。
 
-> ⚠️ token 有有效期。过期后 `update-data.yml` 会失败并**自动开告警 issue**（label `data-update-failure`）。按上述方式重新获取并更新 Secret，手动 Run 一次 workflow 确认成功后关闭 issue。
+> ⚠️ token 有有效期（兜底通道才会用到它）。主通道失败时 `update-data.yml` 会失败并**自动开告警 issue**（label `data-update-failure`）。修复后手动 Run 一次 workflow 确认成功后关闭 issue。
 
 ## 二、开启 GitHub Pages（一次性）
 
@@ -44,7 +51,7 @@ https://whatsblue.github.io/ads_analysis_dashboard_normal/
 |---|---|---|
 | `ci.yml` | push 任意分支 / PR 到 main | typecheck + test + build 质量门禁 |
 | `deploy.yml` | push main（前端/共享/管道代码变更）、手动 | 构建 frontend → 部署 Pages |
-| `update-data.yml` | cron `0 21 * * *`（北京 05:00）、手动 | ReOrc 拉数 → 校验 → 13 个 JSON 落盘 → commit → 数据有变化则重新部署 |
+| `update-data.yml` | cron 三批次（北京 05:00/07:30/21:00）、手动 | ReOrc 拉数（开放 API 主 + sql-query 兜底）→ 校验 → 月度分片 JSON 落盘 → commit → 数据有变化则重新部署 |
 
 ### 首次手动触发（验证链路）
 

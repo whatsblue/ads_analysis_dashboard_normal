@@ -15,9 +15,12 @@ pnpm -r test                # Vitest（shared 指标口径 + frontend 关键组�
 pnpm --filter frontend build    # 产出 frontend/dist
 pnpm --filter pipeline start -- --source=rdfile --in <ads_real.js>   # 管道（rdfile 原型种子通道，迁移期）
 
-# 管道主通道（ReOrc，需 Secrets/环境变量）
-REORC_BASE_URL=... REORC_TOKEN=... pnpm --filter pipeline start -- --source=reorc
-# 可选 REORC_WINDOW_DAYS=90：拉取 90 天窗口（回填演练；默认 10 天）
+# 管道月度分片通道（CI 同款，PIPELINE_MODE=monthly）
+# 主通道：开放 API（数据服务个人 API 密钥，长期有效，推荐）
+REORC_OPENAPI_KEY=... PIPELINE_MODE=monthly pnpm --filter pipeline start
+# 兜底：sql-query 通道（登录 token，约 7 天过期；主通道凭证缺失时自动回退到此）
+REORC_TOKEN=... PIPELINE_MODE=monthly pnpm --filter pipeline start
+# 可选 REORC_START/REORC_END：回填窗口（默认 2025-01-01 ~ 北京昨日）
 # 可选 REORC_PROBE_SQL（分号分隔）+ REORC_PROBE_CONN：只读探查，每条 SQL 打印前 20 行，不改代码即可验证数仓
 ```
 
