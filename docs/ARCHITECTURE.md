@@ -10,7 +10,7 @@
 │  数据源               │      │  GitHub（唯一真相源 + 运行时）              │
 │  · ReOrc 平台 API     │      │  ┌─────────────────────────────────────┐  │
 │    (api.cn.reorc.cloud)│◀──────││ Actions: update-data.yml             │  │
-│  · 数据库只读连接(备选)│ 拉取 │ │  每日 UTC 21:00 (北京 05:00)          │  │
+│  · 数据库只读连接(备选)│ 拉取 │ │  每日三批次 北京 05:00/07:30/21:00     │  │
 │    Meta/Google 投放   │      │ │  pipeline 拉数→校验→生成 JSON→commit │  │
 └──────────────────────┘      │  └──────────────┬──────────────────────┘  │
                               │                 ▼ 触发                     │
@@ -130,15 +130,62 @@ cli.ts --source=reorc（默认）
 
 - **通道抽象**：`Source` 接口（拉取原始行）→ reorc / db / rdfile 三实现。切换通道只改 `--source` 参数，聚合口径层复用。
 - **迁移期策略**：`--source=rdfile` 把原型 `ads_real.js` 转为契约 JSON（Phase 0 fixture 即此产物），前端开发不被数据源阻塞；ReOrc 凭据就绪后切 `reorc`。
-- **凭据**：`REORC_BASE_URL` / `REORC_TOKEN` 存 GitHub Secrets；token 失效时管道以明确错误码失败并开 Issue 指导刷新。
+- **凭据**：`REORC_BASE_URL` / `REORC_TOKEN` 存 GitHub Secrets；token 失效时管道以明确错误码失败并开 Issue 指导刷新；拉数前另有 token 剩余有效期预警（<48h 自动开 issue 提醒续期，2026-11-25 断更 4 天事故防复发）。
+
+### 7.1 取数链路与来源（2026-11-25 补记定版）
+
+```
+GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 三批次）
+  → pipeline 包启动（Node 22 + tsx）
+  → ReOrc 平台 REST API（HTTPS api.cn.reorc.cloud/api，Bearer REORC_TOKEN）
+      ① discover：按连接名 selectdb 解析 connection_id（GET 连接列表）
+      ② POST /conn/connections/sql-query
+         body = { connection_id, sql, env_id, database: data_warehouse_prod, limit, offset }
+  → 平台以自身登记的 selectdb 连接（Doris 协议）代为执行仓库内 SQL，分页返回结果集（5000 行/页）
+  → pipeline：zod 契约校验 → shared 派生计算 → 月度分片 JSON + manifest
+  → commit main → Pages 部署 → 前端按需懒加载
+```
+
+机制要点：**SQL 文本维护在仓库**（queries.ts 模板，列别名即契约），平台仅代为执行；**数据库凭据登记在平台的「连接」内**，本链路全程只持有平台 token（短效 JWT，约 7 天）。本地核对走同一通道（reorc-cli `global-connections query` 为同一 sql-query 能力）。
+
+数仓数据来源（`data_warehouse_prod`，ReOrc 上游建模管道产出）：
+
+| 表 | 用途 |
+|---|---|
+| `ads_marketing_channel/campaign/country/age_daily` | 统一营销日表（platform=meta/google/tiktok/snapchat，四维拆分） |
+| `ads_marketing_spu_daily` | 商品×日（SPU 字段直接可用） |
+| `ads_marketing_creative_by_ad_daily` | 广告×日（ad_name/creative_type/creative_code） |
+| `belle_oversea.dim_facebook_ad_info_mapping_current` | Meta 广告维表（material_type/kol_name/created_time） |
+| `ods_eccang_order` | 易仓订单明细（status=4 已付款，整站 GMV 口径，对齐观远） |
+| `ods_edm_ads_shopify_marketing_attribution_daily` | Shopify EDM 营销归因日销售（utm=Klaviyo+CartSee） |
+
+### 7.2 数据与逻辑分层
+
+| 层 | 位置 | 内容 |
+|---|---|---|
+| 数据存储 | SelectDB 数仓 `data_warehouse_prod` | 上表各主题基础表；本仓库只读，不存任何派生指标 |
+| 数据快照 | 仓库 `frontend/public/data/` | 管道产出的月度分片 JSON（19 主题×月）+ manifest/dims，前端唯一数据源 |
+| 拉取逻辑 | `pipeline/src/sources/reorc/queries.ts` | 每主题 SQL 模板 + 列别名（别名=契约的一部分）+ 口径映射（clicks=link_clicks、orders=unified_orders 等） |
+| 管道逻辑 | `pipeline/src/sources/reorc/{monthly,rows}.ts`、`validate.ts`、`build/emit.ts` | 行映射、月度分片与二分翻页、契约校验、原子写盘 |
+| 口径逻辑 | `shared/src/metrics.ts` | 派生指标（ROAS/CVR/CPA/AOV 等）唯一实现，前端与管道共用 |
+| 展示逻辑 | `frontend/src/{specs,views,components}` | 仅展示层聚合与配置驱动渲染，不算口径 |
+
+### 7.3 为何经由平台 API 而非直连 SelectDB
+
+1. **凭据安全收口**：直连需把数仓账密放进 GitHub Secrets，权限大且泄露影响面大；平台 token 短效、可吊销、权限经平台管控。
+2. **公网可达**：Actions runner 在公网，数仓通常仅内网/白名单可达；ReOrc API 为公网 HTTPS——「无人值守、不依赖任何人的电脑」核心原则的前提。
+3. **统一入口与审计**：连接、账号、审计由平台统一管理（平台网页 / reorc-cli / CI 同一入口同一权限体系），旁路直连无审计。
+4. **只读网关**：sql-query 为平台只读查询通道（限流/超时/分页协议由平台封装）；直连则是全权限数据库连接。
+
+代价与兜底：token 周级过期是本链路唯一运维点 → 已有「<48h 过期预警 issue + 失败自动告警 + 部署前新鲜度校验拒发旧数据」三重防线（2026-11-25 断更 4 天事故后补齐，根因即 token 过期）。
 
 ## 8. CI/CD 设计
 
 | workflow | 触发 | 步骤 |
 |---|---|---|
 | `ci.yml` | PR / push（非 main 的任意分支） | install → typecheck → vitest → build |
-| `update-data.yml` | cron `0 21 * * *`（北京 05:00）+ workflow_dispatch | pipeline 拉数校验 → 有变化则 commit `data: T+1 update <date>` → push（触发 deploy） |
-| `deploy.yml` | push main（含数据 commit） | pnpm build → actions/upload-pages-artifact → actions/deploy-pages |
+| `update-data.yml` | cron 三批次（北京 05:00 / 07:30 / 21:00）+ workflow_dispatch | token 预警 → 拉数校验 → 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
+| `deploy.yml` | push main（前端共享/管道代码变更）、手动 | pnpm build → actions/upload-pages-artifact → actions/deploy-pages |
 
 Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite `base` 配置子路径）。
 
