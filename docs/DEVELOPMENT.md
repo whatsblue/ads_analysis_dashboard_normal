@@ -96,11 +96,14 @@ Conventional Commits：`feat|fix|refactor|docs|chore|data: 摘要`。数据自�
 5. 部署后线上 5-20 分钟内 CDN（Fastly）才完成传播，genAt 未变先等待再排查；部署 job checkout 的是 origin/main 最新，与触发 push 的 SHA 可能相差一个数据 commit
 6. 数仓锚点直查（不动代码）：设置 `REORC_PROBE_SQL` + `REORC_PROBE_CONN` 派发探查 run（见 §2）
 
-## 7. 当前实施状态（2026-11-14 滚动更新）
+## 7. 当前实施状态（2026-11-25 滚动更新）
 
 - [x] ReOrc 通道上线：每日 cron（北京 05:00）拉数→校验→commit→自动部署 Pages，失败自动开 Issue
 - [x] 线上看板验证闭环：genAt 演进、19/19 主题有数、数据锚点与数仓 SUM 逐位一致（11/11 PASS）
 - [x] 指标口径观远对齐：Google clicks=platform_clicks、EDM=Klaviyo 归因销售额（详见 §4.1 与 docs/PRODUCT.md §6）
 - [x] 全历史数据验证：2025-01-01 起覆盖完整、质量零缺陷（报告：`_wt_staging/data-verify-report.md`）
-- [ ] 月度分片全历史方案（方案已定：23+ 月分片按需加载 + 滚动重写最近 3 个月 + 一次性按月回填，待实施）
+- [x] 月度分片全历史方案已上线：自 2025-01 起按月分片按需加载；契约 v5（Campaign 按系列 ID 分桶，同名不同 ID 不合并）
+- [x] 数据更新三批次保障（05:00 主批次 / 07:30 观远 BI 对齐批次 / 21:00 晚间收敛批次）+ 三层防静默故障（push 3 次重试含 rebase、部署使用本批次数据 commit、部署前新鲜度校验必须覆盖北京昨日）——详见 docs/FEATURES.md §六
+- [x] Meta 表头口径提示统一（specs/columns.ts TH_TIP.std：花费=「已花费金额（Meta 广告后台）」、展示/订单/转化价值同格式、点击量=「点击量：Meta 广告后台链接点击量」；双冻结第二列表头底色对齐 var(--head)）
 - [ ] worktree 与三个已合并 feat 分支清理（等用户确认）
+- [ ] 自定义域名接入（方案已定版：DNS CNAME → 仓库 CNAME 文件 → Pages 设置强制 HTTPS → vite base 改 `/` 重部署；等用户提供域名后实施）
