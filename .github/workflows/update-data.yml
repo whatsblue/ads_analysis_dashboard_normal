@@ -62,6 +62,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # REORC_TOKEN 过期预警（2026-11-25 断更 4 天事故防复发）：剩余 <48h 自动开 issue 提醒续期，不阻塞本次拉数
+      - name: Token expiry pre-check
+        env:
+          REORC_TOKEN: ${{ secrets.REORC_TOKEN }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tok = (process.env.REORC_TOKEN || '').replace(/^\s*[Bb]earer\s+/, '').trim();
+            const parts = tok.split('.');
+            if (parts.length !== 3) {
+              core.warning('REORC_TOKEN 非 JWT 形式，无法解析过期时间');
+              return;
+            }
+            const exp = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8')).exp;
+            const remainH = (exp * 1000 - Date.now()) / 3600000;
+            core.notice('REORC_TOKEN 剩余有效期约 ' + remainH.toFixed(1) + ' 小时（exp=' + new Date(exp * 1000).toISOString() + '）');
+            if (remainH >= 48) return;
+            const title = '[自动告警] REORC_TOKEN 即将过期（<48h），请续期';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'token-expiry-warning',
+            });
+            const body = [
+              'REORC_TOKEN 剩余有效期约 **' + remainH.toFixed(1) + ' 小时**（过期时间 ' + new Date(exp * 1000).toISOString() +
+                '，北京时间 ' + new Date(exp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) + '）。',
+              '',
+              '续期步骤（见 docs/SECRETS.md）：',
+              '1. 本地终端执行 `reorc-cli login`（浏览器完成登录）',
+              '2. 将新 token 更新到 Settings → Secrets and variables → Actions → `REORC_TOKEN`',
+              '',
+              '续期完成并确认 update-data 成功后关闭本 issue。',
+            ].join('\n');
+            if (issues.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['token-expiry-warning'],
+              });
+            } else if (issues[0].updated_at < new Date(Date.now() - 6 * 3600 * 1000).toISOString()) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body,
+              });
+            }
+
       # action-setup@v4 在当前 runner 上拉取 pnpm 失败，改用 npm 全局安装（runner 自带 node/npm）
       - name: Setup pnpm
         run: npm install -g pnpm@12
@@ -218,6 +269,28 @@ jobs:
 
       # Pages 站点已通过 API 启用(build_type=workflow)，此处仅读取配置
       - uses: actions/configure-pages@v5
+
+      # rerun-failed-jobs 防护：本 workflow 的 upload 与 deploy 同 job，重跑会再上传同名 artifact，
+      # deploy-pages 检测到 2 个同名直接失败（2026-11-25 Run#54）。upload 前先清理本 run 同名 artifact
+      - name: Remove stale pages artifact
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: arts } = await github.rest.actions.listArtifactsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'github-pages',
+            });
+            for (const a of arts.artifacts) {
+              if (a.workflow_run && a.workflow_run.id === context.runId && !a.expired) {
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: a.id,
+                });
+                core.notice('removed stale github-pages artifact ' + a.id);
+              }
+            }
 
       - uses: actions/upload-pages-artifact@v3
         with:
