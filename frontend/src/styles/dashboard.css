@@ -774,10 +774,12 @@ nav.lv2 .cap {
 .card-b {
   padding: 12px 16px;
 }
-/* 2026-11-17 表头页面级吸顶改造：.card-b 不再设 overflow-x/transform——
+/* 2026-11-17 表头页面级吸顶改造：.card-b 默认不设 overflow-x/transform——
    overflow 会使容器成为 sticky 包含块（表头只能在容器内吸顶，页面滚动时随卡片滚走）；
    transform 建立 stacking context 会吞掉表头 z-index（滚动中后位卡片盖住吸顶表头）。
-   宽表超出卡宽时交给页面级横向滚动（宽屏用户几乎不触发） */
+   2026-11-25 修正：默认态宽表直接溢出卡片边界由页面横滚兜底被用户否决（Top 素材分析长
+   广告名列必超宽）——表格实测超宽时由 MetricsTable 挂 scroll-on 转卡片内滑块（该表吸顶
+   随之让位，未超宽的表吸顶不受影响） */
 .chart {
   width: 100%;
   height: 340px;
@@ -873,7 +875,7 @@ table.matrix {
 .matrix td:first-child,
 .matrix th:first-child {
   position: sticky;
-  left: 0; /* 页面级横向滚动（原容器内横滚 left:-16px 补偿卡 padding 已失效） */
+  left: 0; /* 页面级横滚与卡内横滚（scroll-on，容器 padding 0）两态下均贴滚动口左缘=卡片边缘 */
   z-index: 2;
   text-align: left;
   font-weight: 600;
@@ -885,6 +887,23 @@ table.matrix {
 .card-b > .matrix {
   margin: 0 -16px;
   width: calc(100% + 32px);
+}
+/* 卡内横滚（scroll-on，仅实测超宽时由组件挂载）：容器约束表格于卡宽内，底部滑块左右滑；
+   padding 归零由表格直接贴卡片左右边缘（负 margin 方案在 overflow 剪裁下左缘 16px 不可滚达）；
+   未超宽不加本类，容器不劫持 sticky 包含块，表头页面级吸顶保持有效 */
+.tbl-scroll.scroll-on {
+  overflow-x: auto;
+  padding: 0;
+}
+.tbl-scroll.scroll-on > .matrix {
+  margin: 0;
+  width: 100%;
+}
+/* scroll-on 后 sticky 包含块变为本容器（容器无纵向滚动=无吸顶效果）：top 归零，防吸顶约束
+   把表头向下推出正常位置与表体重叠 */
+.tbl-scroll.scroll-on .matrix thead tr.gtr th,
+.tbl-scroll.scroll-on .matrix thead tr:not(.gtr) th {
+  top: 0;
 }
 /* 表头页面级吸顶（2026-11-17 业务更新，原为容器内吸顶）：表体随页面滚动，
    thead 钉在吸顶 topbar 下方无空隙（--topbarH 由 App 挂载时测量注入，

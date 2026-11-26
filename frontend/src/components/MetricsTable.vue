@@ -12,7 +12,7 @@ const PCT_STATE = new Map<string, boolean>();
  * - 总计行（Σ求和 + 比率重算）；展开行组（素材编号 expOf）；首列下钻链接（linkFirst）
  * - 环比格 hover 归因（attrOn，浮层由 App 级 AttrTip 渲染）；导出（ExportModal）
  */
-import { computed, onMounted, ref, useSlots, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue';
 import { cmpHL, dateRange, derive, deriveG, HL_CMP, HL_TH, sumMetrics, type Metrics } from '@ads/shared';
 import { deltaPct } from '@ads/shared';
 import { G_COLS, G_GROUP_DEF, METRIC_GROUPS, PCT_COLS, PCT_DEF, STD_COLS, TH_TIP, type ColDef, type GroupMap } from '@/specs/columns';
@@ -111,15 +111,40 @@ const emit = defineEmits<{ link: [label: string] }>();
 
 /* 表头页面级吸顶：挂载后测量分组行实际高度注入本表根节点 --gtrH（列名行 sticky top=--topbarH+--gtrH） */
 const tblRoot = ref<HTMLElement | null>(null);
+const scrollWrap = ref<HTMLElement | null>(null);
+/* 卡内横滚（2026-11-25 用户反馈 Top 素材分析等宽表溢出卡片）：表格实际宽超出容器时挂 scroll-on
+   转卡片内底部滑块；未超宽不加 overflow——容器无 overflow 才不劫持 sticky 包含块，表头页面级
+   吸顶保持有效（两态样式见 dashboard.css .scroll-on）。ResizeObserver 覆盖触发源：行数/列数
+   （占比开关、加载更多）、字体加载、视口缩放 */
+const xOverflow = ref(false);
+let sizeRo: ResizeObserver | null = null;
+
+/* stk2 双冻结：第二列 left=首列实际宽（测量注入 --col1w，防字体晚载偏移）；横滚两态切换改
+   变容器 padding（16→0），需重测对齐 */
+const setCol1 = (): void => {
+  const c2 = tblRoot.value?.querySelector('.matrix thead tr:not(.gtr) th:nth-child(2)');
+  if (tblRoot.value && c2) tblRoot.value.style.setProperty('--col1w', String((c2 as HTMLElement).offsetLeft) + 'px');
+};
+
+watch(xOverflow, () => {
+  if (props.sticky2) nextTick(setCol1);
+});
+
 onMounted(() => {
-  /* stk2 双冻结：第二列 left=首列实际宽（挂载+字体就绪后测量注入 --col1w，防字体晚载偏移） */
-  const setCol1 = (): void => {
-    const c2 = tblRoot.value?.querySelector('.matrix thead tr:not(.gtr) th:nth-child(2)');
-    if (tblRoot.value && c2) tblRoot.value.style.setProperty('--col1w', String((c2 as HTMLElement).offsetLeft) + 'px');
-  };
   if (props.sticky2) {
     setCol1();
     document.fonts?.ready.then(setCol1).catch(() => undefined);
+  }
+  const tbl = scrollWrap.value?.querySelector('table.matrix');
+  if (scrollWrap.value && tbl) {
+    /* +1px 容差：临界宽附近两态间 padding 差会引起往返抖动 */
+    const check = (): void => {
+      xOverflow.value = tbl.getBoundingClientRect().width > scrollWrap.value!.getBoundingClientRect().width + 1;
+    };
+    check();
+    sizeRo = new ResizeObserver(check);
+    sizeRo.observe(tbl);
+    sizeRo.observe(scrollWrap.value);
   }
   const gtr = tblRoot.value?.querySelector('.matrix thead tr.gtr');
   if (!tblRoot.value || !gtr) return;
@@ -127,6 +152,7 @@ onMounted(() => {
   setH();
   new ResizeObserver(setH).observe(gtr);
 });
+onBeforeUnmount(() => sizeRo?.disconnect());
 
 const slots = useSlots();
 
@@ -499,7 +525,7 @@ const cmpCount = computed(() => (filter.applied.cmpOn ? filter.cmpRanges.length 
       <button class="btn xs exp-btn" @click="expOpen = true">⇩ 导出</button>
     </div>
     <slot name="below-head"></slot>
-    <div class="card-b tbl-scroll" :class="{ tall: limit > 10 }">
+    <div ref="scrollWrap" class="card-b tbl-scroll" :class="{ tall: limit > 10, 'scroll-on': xOverflow }">
       <table class="matrix">
         <thead>
           <tr class="gtr">
