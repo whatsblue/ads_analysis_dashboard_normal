@@ -137,7 +137,7 @@ cli.ts（PIPELINE_MODE=monthly）
 ### 7.1 取数链路与来源（2026-11-25 补记定版）
 
 ```
-GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 三批次）
+GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 日常批次【窗口=近 2 自然月】+ 周日 15:00 低峰全历史收敛批次）
   → pipeline 包启动（Node 22 + tsx）
   → 拉数双通道（cli.ts monthly 分支按凭证自动选择）：
       ① 主通道（REORC_OPENAPI_KEY 存在时）：ReOrc 开放 API 数据服务
@@ -190,14 +190,16 @@ GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 三批次）
 3. **统一入口与审计**：连接、账号、审计由平台统一管理（平台网页 / reorc-cli / CI 同一入口同一权限体系），旁路直连无审计。
 4. **只读网关**：sql-query 为平台只读查询通道（限流/超时/分页协议由平台封装）；直连则是全权限数据库连接。
 
-代价与兜底：sql-query 通道登录 JWT 周期过期曾致断更（2026-11-25 事故）→ 已由开放 API 主通道根治（个人密钥长期有效，与登录态解耦）；token <48h 预警 + 失败自动告警 + 部署前新鲜度校验三重防线保留兜底。开放 API 通道的已知约束：preview 服务端为全量聚合外层过滤执行，大服务必须周切片（nginx 60s 网关限）；time_between 上界为 datetime 语义，裸日期（'YYYY-MM-DD'）被解析为当天 00:00:00 会丢窗口尾日全天数据（对账实锤后拉取层已显式补 ' 23:59:59'）；个别周窗口是结构性慢查询（重试无用），拉取层对网络超时/429/5xx 重试耗尽后自动二分窗口递归拉取（子窗口零重试直达），单日窗口仍失败才报错。
+代价与兜底：sql-query 通道登录 JWT 周期过期曾致断更（2026-11-25 事故）→ 已由开放 API 主通道根治（个人密钥长期有效，与登录态解耦）；token <48h 预警 + 失败自动告警 + 部署前新鲜度校验三重防线保留兜底。开放 API 通道的已知约束：preview 服务端为全量聚合外层过滤执行，大服务必须周切片（nginx 60s 网关限）；time_between 上界为 datetime 语义，裸日期（'YYYY-MM-DD'）被解析为当天 00:00:00 会丢窗口尾日全天数据（对账实锤后拉取层已显式补 ' 23:59:59'）；个别周窗口是结构性慢查询（重试无用），拉取层对网络超时/429/5xx 重试耗尽后自动二分窗口递归拉取（子窗口零重试直达），单日窗口仍失败换带重试的原始客户端重拉一轮（大促日负载波动防线），仍失败才报错。
+
+**分层批次窗口（2026-11-26 定版）**：大促月深水区（如 2025-11 双 11 周）creative 单日在服务端聚合执行下负载随时段剧烈波动——四次实测早晨（CI run#56）/上午/深夜均终败（单日防线也不可过），仅下午低峰可过。因此日常批次只拉近 2 自然月（~40min，避开深水区），emit 以 mergeBaseline 合并旧基线（manifest.months/range.min/dims 取并集，窗口外历史分片保留）；历史月迟到回传由周日北京 15:00 低峰的全历史批次幂等重生成收敛（纯覆盖）。
 
 ## 8. CI/CD 设计
 
 | workflow | 触发 | 步骤 |
 |---|---|---|
 | `ci.yml` | PR / push（非 main 的任意分支） | install → typecheck → vitest → build |
-| `update-data.yml` | cron 三批次（北京 05:00 / 07:30 / 21:00）+ workflow_dispatch | token 预警 → 拉数校验（开放 API 主 + sql-query 兜底）→ 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
+| `update-data.yml` | cron 日常批次（北京 05:00 / 07:30 / 21:00，窗口=近 2 自然月）+ 周日北京 15:00 低峰全历史批次 + workflow_dispatch | token 预警 → 窗口解析（dispatch 输入 / 周日全历史 / 其余近 2 月）→ 拉数校验（开放 API 主 + sql-query 兜底；近窗批次 emit 合并旧基线）→ 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
 | `deploy.yml` | push main（前端共享/管道代码变更）、手动 | pnpm build → actions/upload-pages-artifact → actions/deploy-pages |
 
 Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite `base` 配置子路径）。

@@ -12,10 +12,13 @@ name: Update Data
 # 见 docs/SECRETS.md
 on:
   schedule:
-    - cron: '0 21 * * *' # UTC 21:00 = 北京 05:00（主批次，T+1 数据同步完成后）
+    - cron: '0 21 * * *' # UTC 21:00 = 北京 05:00（主批次，T+1 数据同步完成后；窗口=近 2 自然月）
     - cron: '30 23 * * *' # UTC 23:30 = 北京 07:30（与观远 BI 对齐批次：BI 每日约 06:01 抽取数仓，本批取相同数据状态；
                           #   兼作 GitHub schedule 丢触发/延迟兜底——主批次已成功时本次 changed=false 不部署，无副作用）
     - cron: '0 13 * * *' # UTC 13:00 = 北京 21:00（晚间批次，收敛白天迟到回传）
+    - cron: '0 7 * * 0'  # UTC 07:00 周日 = 北京 15:00 低峰：全历史 23 个月幂等重生成（纯覆盖），
+                         #   收敛历史月迟到回传。2026-11-26 定版：2025-11 大促月等深水区在早晨/深夜负载下
+                         #   连单日防线也终败（run#56 + 本地两次复现实锤），仅下午低峰可过——全量固定低峰周日跑
   workflow_dispatch:
     inputs:
       probe:
@@ -128,6 +131,20 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # 窗口解析（2026-11-26 定版）：手动 dispatch 用输入值；周日 15:00 低峰批次全历史；
+      # 其余日常批次近 2 自然月（~40min，避开 2025-11 大促月深水区——早晨/深夜必死），
+      # 窗口外历史月份分片由 emit 合并基线保留（PIPELINE_MERGE），迟到回传由周日全量收敛
+      - name: Resolve start
+        id: start
+        run: |
+          if [ -n "${{ inputs.start }}" ]; then
+            echo "start=${{ inputs.start }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 7 * * 0" ]; then
+            echo "start=2025-01-01" >> "$GITHUB_OUTPUT"
+          else
+            echo "start=$(date -d '-1 month' +%Y-%m-01)" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run pipeline (monthly slices)
         env:
           REORC_BASE_URL: ${{ secrets.REORC_BASE_URL }}
@@ -138,12 +155,13 @@ jobs:
           # 取数目标（sql-query 兜底通道）：selectdb 连接的 data_warehouse_prod（广告聚合层），SQL 内仍带 schema 前缀双保险
           REORC_CONNECTION_NAME: selectdb
           REORC_DATABASE: data_warehouse_prod
-          # v3 月度分片：REORC_START~REORC_END 按自然月逐月拉取；schedule 触发时 inputs 为空，
-          # 此处 fallback 2025-01-01（覆盖 2025 历史年，cli 内部默认 2026-01-01 不再生效）
+          # v3 月度分片：REORC_START~REORC_END 按自然月逐月拉取
           PIPELINE_MODE: monthly
           PIPELINE_PROBE: ${{ inputs.probe }}
-          REORC_START: ${{ inputs.start || '2025-01-01' }}
+          REORC_START: ${{ steps.start.outputs.start }}
           REORC_END: ${{ inputs.end }}
+          # 近窗日常批次合并旧基线（不丢历史月份）；周日全量批次纯覆盖（口径变更时的重置语义）
+          PIPELINE_MERGE: ${{ github.event_name == 'schedule' && github.event.schedule == '0 7 * * 0' && 'false' || 'true' }}
           REORC_PROBE_SQL: ${{ inputs.probe_sql }}
           REORC_PROBE_CONN: ${{ inputs.probe_conn }}
         run: pnpm --filter pipeline start

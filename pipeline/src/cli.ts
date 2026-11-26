@@ -32,6 +32,10 @@ interface Args {
   probe?: boolean;
   /** v3 月度分片模式（--monthly / PIPELINE_MODE=monthly）：REORC_START~REORC_END 按自然月拉取 */
   monthly?: boolean;
+  /** 近窗重生成合并基线（--merge / PIPELINE_MERGE=true）：emit 时保留窗口外旧月份清单与全局 dims——
+   *  CI 日常批次只拉近 2 月（2026-11-26 定版：2025-11 大促月上午/深夜负载下必死，run#56 实锤），
+   *  历史月份由周日低峰全量批次收敛 */
+  merge?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -41,6 +45,7 @@ function parseArgs(argv: string[]): Args {
     out: resolve(import.meta.dirname, '../../frontend/public/data'),
     dry: false,
     monthly: process.env.PIPELINE_MODE === 'monthly',
+    merge: process.env.PIPELINE_MERGE === 'true',
   };
   for (const a of argv) {
     if (a.startsWith('--source=')) args.source = a.slice('--source='.length) as SourceKind;
@@ -49,6 +54,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--dry') args.dry = true;
     else if (a === '--probe') args.probe = true;
     else if (a === '--monthly') args.monthly = true;
+    else if (a === '--merge') args.merge = true;
     else throw new Error(`未知参数：${a}`);
   }
   // 月度/探查模式不看拉数通道（source 默认 rdfile 无 input 属正常）
@@ -247,9 +253,9 @@ async function main() {
       console.log('[pipeline] --dry：跳过写盘');
       return;
     }
-    const result = emitMonthly(payload, args.out);
+    const result = emitMonthly(payload, args.out, { mergeBaseline: args.merge });
     const totalKB = (result.files.reduce((s, f) => s + f.bytes, 0) / 1024).toFixed(1);
-    console.log(`[pipeline] 写盘完成：${result.files.length} 个文件，共 ${totalKB} KB → ${result.outDir}`);
+    console.log(`[pipeline] 写盘完成：${result.files.length} 个文件，共 ${totalKB} KB → ${result.outDir}${args.merge ? '（已合并旧基线）' : ''}`);
     for (const f of result.files) console.log(`  - ${f.path} (${(f.bytes / 1024).toFixed(1)} KB)`);
     return;
   }

@@ -1,10 +1,11 @@
 /**
  * 契约文件写盘：全部文件先写 .tmp 再原子 rename，失败不残留半成品。
  */
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { MonthSlice } from '@ads/shared';
 import type { RawDataset } from '../sources/types';
+import { mergeDims } from '../sources/reorc/monthly';
 
 export interface EmitResult {
   outDir: string;
@@ -74,7 +75,11 @@ export interface MonthlyEmitPayload {
   slices: MonthSlice[];
 }
 
-export function emitMonthly(payload: MonthlyEmitPayload, outDir: string): EmitResult {
+export function emitMonthly(payload: MonthlyEmitPayload, outDir: string, opts?: {
+  /** 合并基线（2026-11-26）：true 时读取 outDir 现有 manifest/dims，months/range.min/dims 取并集——
+   *  近窗日常批次（只拉最近月份）不丢历史月份分片清单与全局枚举；窗口外旧分片文件原样保留 */
+  mergeBaseline?: boolean;
+}): EmitResult {
   removeV2Files(outDir);
   const files: { path: string; bytes: number }[] = [];
   const write = (rel: string, data: unknown) => {
@@ -86,15 +91,41 @@ export function emitMonthly(payload: MonthlyEmitPayload, outDir: string): EmitRe
     renameSync(tmp, target);
     files.push({ path: rel, bytes: buf.byteLength });
   };
+  let { dims, manifest } = payload;
+  if (opts?.mergeBaseline) {
+    const base = readBaseline(outDir);
+    if (base) {
+      dims = mergeDims(base.dims, dims);
+      manifest = {
+        ...manifest,
+        months: [...new Set([...base.manifest.months, ...manifest.months])].sort(),
+        range: {
+          ...manifest.range,
+          min: base.manifest.range.min < manifest.range.min ? base.manifest.range.min : manifest.range.min,
+        },
+      };
+    }
+  }
   // dims 拆分：core（无 adList）+ dims-ads.json（adList 专文件，前端仅 m4 下钻懒加载）
-  const { adList, ...coreDims } = payload.dims;
+  const { adList, ...coreDims } = dims;
   void adList;
   write('dims.json', coreDims);
-  write('dims-ads.json', { adList: payload.dims.adList });
+  write('dims-ads.json', { adList: dims.adList });
   for (const s of payload.slices) write(`months/${s.month}.json`, s);
-  write('manifest.json', payload.manifest); // 最后写：前端以 manifest.v/months 为准
+  write('manifest.json', manifest); // 最后写：前端以 manifest.v/months 为准
   cleanupTmpMonths(outDir);
   return { outDir, files };
+}
+
+/** 读取现有落盘的 manifest 与 dims（core+adList 重组）作合并基线；首次运行无旧数据返回 null */
+function readBaseline(outDir: string): { manifest: RawDataset['manifest']; dims: RawDataset['dims'] } | null {
+  const mPath = join(outDir, 'manifest.json');
+  if (!existsSync(mPath)) return null;
+  const manifest = JSON.parse(readFileSync(mPath, 'utf8')) as RawDataset['manifest'];
+  const core = JSON.parse(readFileSync(join(outDir, 'dims.json'), 'utf8')) as Omit<RawDataset['dims'], 'adList'>;
+  const adsPath = join(outDir, 'dims-ads.json');
+  const ads = existsSync(adsPath) ? (JSON.parse(readFileSync(adsPath, 'utf8')) as { adList: string[][] }) : { adList: [] };
+  return { manifest, dims: { ...core, adList: ads.adList } as RawDataset['dims'] };
 }
 
 /** v2 遗留文件清理（channel.json/meta/google 目录；前端 v3 不再请求） */
