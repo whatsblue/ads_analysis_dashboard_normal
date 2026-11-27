@@ -215,6 +215,6 @@ Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite 
 - Google×shoplazza、TikTok、Snapchat 未接入（与原型一致，dims/契约预留扩展位）。
 - 整站 GMV 为每日 T+1 快照口径（易仓 status=4 已付款，按下单日期），历史月份延迟回填导致历史区间略低于实时数仓——沿用原型口径，页脚保留说明文案。
 - gcmp（Google 系列桶）键为平台数字 ID，名字映射由管道输出至 `google/type.json.cmpNames`。通道口径差异（2026-11-26 对账定性）：sql-query 通道 google_cmp 为无窗口全表 DISTINCT（全历史 campaign 超集），开放 API 通道只能从 campaign 服务月窗口行收集（当月活跃集）；前端明细只显示当月行且每行映射必有（google_cmp/google_camp 同源行），月窗口量功能完备，无需对齐全历史超集。
-- 当前月（滚动今日月）数据存在活性漂移（广告归因窗口回填+订单状态回写，数值集中近几日、方向一致变完整）——两通道拉取时点不同即有数值差，属数据源自然演变非通道差异；对账以历史封账月为准（2026-11-26 对账：历史月全字段 PASS）。
+- 数据源活性漂移不限于当前月（2026-11-27 最终对账实锤）：订单回写/退款修正长尾可跨至 2 个月前的封账月（2026-09/10 shopify/unknown 渠道 gmv ±0.03%~0.33%、订单 ±1~6 单，零行缺失、方向一致变完整）；另有两类维表漂移：adList 同名广告覆盖写保留行序敏感（rows.ts 按 adName 覆写，两通道行序不同致保留的 ad_no 不同，实锤 880 对，反查表口径差非行数据差异）、metaCampNames 平台改名（运营加品牌后缀/清状态标记，campaign_id 桶键不变）。均为数据源/维表自然演变非通道差异；对账标准：行数据历史月容差内 PASS + 漂移窗白名单报告（2026-11-27 全量 26 文件 PASS：通道口径一致性另由同日双通道抽样 2025-06/2026-02 全字段 PASS 独立证明）。
 - ReOrc 平台 sql-query API 三重限制：①单页钳制 5000 行（body.limit 上限）②拒绝 SQL 末尾裸 ORDER BY（包装器追加页 limit/offset，语法非法）③SQL 内自带 LIMIT 与 body.limit 冲突。offset 翻页在无序 GROUP BY 上行序不稳定 → 页间重复/尾部丢行。解法：monthly.ts `queryWindow` 自适应二分（页满即二分日期窗口递归拉取，窗口不重叠合并不损），queries.ts 禁止末尾 ORDER BY/LIMIT。
 - ReOrc 平台默认库可能漂移（belle_oversea → guanyuan_legacy）：回填/定时任务需显式指定 REORC_DATABASE。
