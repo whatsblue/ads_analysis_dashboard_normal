@@ -51,7 +51,7 @@ https://whatsblue.github.io/ads_analysis_dashboard_normal/
 |---|---|---|
 | `ci.yml` | push 任意分支 / PR 到 main | typecheck + test + build 质量门禁 |
 | `deploy.yml` | push main（前端/共享/管道代码变更）、手动 | 构建 frontend → 部署 Pages |
-| `update-data.yml` | cron 三批次（北京 05:00/07:30/21:00）、手动 | ReOrc 拉数（开放 API 主 + sql-query 兜底）→ 校验 → 月度分片 JSON 落盘 → commit → 数据有变化则重新部署 |
+| `update-data.yml` | cron 双批次（北京 16:30/19:30 低峰窗口）+ 周日 15:00 全量、手动 | ReOrc 拉数（开放 API 主 + sql-query 兜底）→ 校验 → 月度分片 JSON 落盘 → commit → 数据有变化则重新部署 |
 
 ### 首次手动触发（验证链路）
 

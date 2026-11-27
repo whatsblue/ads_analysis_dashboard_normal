@@ -10,7 +10,7 @@
 │  数据源               │      │  GitHub（唯一真相源 + 运行时）              │
 │  · ReOrc 平台 API     │      │  ┌─────────────────────────────────────┐  │
 │    (api.cn.reorc.cloud)│◀──────││ Actions: update-data.yml             │  │
-│  · 数据库只读连接(备选)│ 拉取 │ │  每日三批次 北京 05:00/07:30/21:00     │  │
+│  · 数据库只读连接(备选)│ 拉取 │ │  每日两批次 北京 16:30/19:30 低峰      │  │
 │    Meta/Google 投放   │      │ │  pipeline 拉数→校验→生成 JSON→commit │  │
 └──────────────────────┘      │  └──────────────┬──────────────────────┘  │
                               │                 ▼ 触发                     │
@@ -137,7 +137,7 @@ cli.ts（PIPELINE_MODE=monthly）
 ### 7.1 取数链路与来源（2026-11-25 补记定版）
 
 ```
-GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 日常批次【窗口=近 2 自然月】+ 周日 15:00 低峰全历史收敛批次）
+GitHub Actions（update-data.yml，北京 16:30 / 19:30 日常批次【窗口=近 2 自然月】+ 周日 15:00 低峰全历史收敛批次）
   → pipeline 包启动（Node 22 + tsx）
   → 拉数双通道（cli.ts monthly 分支按凭证自动选择）：
       ① 主通道（REORC_OPENAPI_KEY 存在时）：ReOrc 开放 API 数据服务
@@ -192,14 +192,14 @@ GitHub Actions（update-data.yml，北京 05:00 / 07:30 / 21:00 日常批次【�
 
 代价与兜底：sql-query 通道登录 JWT 周期过期曾致断更（2026-11-25 事故）→ 已由开放 API 主通道根治（个人密钥长期有效，与登录态解耦）；token <48h 预警 + 失败自动告警 + 部署前新鲜度校验三重防线保留兜底。开放 API 通道的已知约束：preview 服务端为全量聚合外层过滤执行，大服务必须周切片（nginx 60s 网关限）；time_between 上界为 datetime 语义，裸日期（'YYYY-MM-DD'）被解析为当天 00:00:00 会丢窗口尾日全天数据（对账实锤后拉取层已显式补 ' 23:59:59'）；个别周窗口是结构性慢查询（重试无用），拉取层对网络超时/429/5xx 重试耗尽后自动二分窗口递归拉取（子窗口零重试直达），单日窗口仍失败换带重试的原始客户端重拉一轮（大促日负载波动防线），仍失败才报错。
 
-**分层批次窗口（2026-11-26 定版）**：大促月深水区（如 2025-11 双 11 周）creative 单日在服务端聚合执行下负载随时段剧烈波动——四次实测早晨（CI run#56）/上午/深夜均终败（单日防线也不可过），仅下午低峰可过。因此日常批次只拉近 2 自然月（~40min，避开深水区），emit 以 mergeBaseline 合并旧基线（manifest.months/range.min/dims 取并集，窗口外历史分片保留）；历史月迟到回传由周日北京 15:00 低峰的全历史批次幂等重生成收敛（纯覆盖）。
+**分层批次窗口（2026-11-27 修订）**：preview 服务端负载窗口全天实测（run#56/57/58/59 四连败 + 本地多轮复现）——北京 05:00-14:00 与 21:30 后为高峰必败区（凌晨连最小服务单日 preview 都超时；大促深水区 creative 单日防线也不可过），可用窗口仅下午 ~15:00-17:00 与晚间 ~19:00-21:00（19:13-20:26 实证 6 个月 26 分钟）。且 GitHub schedule 高峰期延迟漂移实测最长 ~9h（21:00 设计批次 06:08 才触发），班次必须落在宽可用窗口。因此日常班次重排为北京 16:30 主批次 + 19:30 收敛批次（兼作延迟兜底，主批次已成功时 changed=false 无副作用），原 05:00/07:30/21:00 三班次废除；日常批次只拉近 2 自然月（~40min，避开深水区），emit 以 mergeBaseline 合并旧基线（manifest.months/range.min/dims 取并集，窗口外历史分片保留）；历史月迟到回传由周日北京 15:00 低峰的全历史批次幂等重生成收敛（纯覆盖）。
 
 ## 8. CI/CD 设计
 
 | workflow | 触发 | 步骤 |
 |---|---|---|
 | `ci.yml` | PR / push（非 main 的任意分支） | install → typecheck → vitest → build |
-| `update-data.yml` | cron 日常批次（北京 05:00 / 07:30 / 21:00，窗口=近 2 自然月）+ 周日北京 15:00 低峰全历史批次 + workflow_dispatch | token 预警 → 窗口解析（dispatch 输入 / 周日全历史 / 其余近 2 月）→ 拉数校验（开放 API 主 + sql-query 兜底；近窗批次 emit 合并旧基线）→ 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
+| `update-data.yml` | cron 日常批次（北京 16:30 主 + 19:30 收敛/兜底，窗口=近 2 自然月；schedule 延迟漂移实测最长 ~9h，班次固定低峰窗口）+ 周日北京 15:00 低峰全历史批次 + workflow_dispatch | token 预警 → 窗口解析（dispatch 输入 / 周日全历史 / 其余近 2 月）→ 拉数校验（开放 API 主 + sql-query 兜底；近窗批次 emit 合并旧基线）→ 有变化则 commit `chore(data)` → 构建 frontend → 新鲜度校验 → 部署 Pages |
 | `deploy.yml` | push main（前端共享/管道代码变更）、手动 | pnpm build → actions/upload-pages-artifact → actions/deploy-pages |
 
 Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite `base` 配置子路径）。
@@ -214,6 +214,7 @@ Pages URL：`https://whatsblue.github.io/ads_analysis_dashboard_normal/`（Vite 
 
 - Google×shoplazza、TikTok、Snapchat 未接入（与原型一致，dims/契约预留扩展位）。
 - 整站 GMV 为每日 T+1 快照口径（易仓 status=4 已付款，按下单日期），历史月份延迟回填导致历史区间略低于实时数仓——沿用原型口径，页脚保留说明文案。
-- gcmp（Google 系列桶）键为平台数字 ID，名字映射由管道输出至 `google/type.json.cmpNames`。
+- gcmp（Google 系列桶）键为平台数字 ID，名字映射由管道输出至 `google/type.json.cmpNames`。通道口径差异（2026-11-26 对账定性）：sql-query 通道 google_cmp 为无窗口全表 DISTINCT（全历史 campaign 超集），开放 API 通道只能从 campaign 服务月窗口行收集（当月活跃集）；前端明细只显示当月行且每行映射必有（google_cmp/google_camp 同源行），月窗口量功能完备，无需对齐全历史超集。
+- 当前月（滚动今日月）数据存在活性漂移（广告归因窗口回填+订单状态回写，数值集中近几日、方向一致变完整）——两通道拉取时点不同即有数值差，属数据源自然演变非通道差异；对账以历史封账月为准（2026-11-26 对账：历史月全字段 PASS）。
 - ReOrc 平台 sql-query API 三重限制：①单页钳制 5000 行（body.limit 上限）②拒绝 SQL 末尾裸 ORDER BY（包装器追加页 limit/offset，语法非法）③SQL 内自带 LIMIT 与 body.limit 冲突。offset 翻页在无序 GROUP BY 上行序不稳定 → 页间重复/尾部丢行。解法：monthly.ts `queryWindow` 自适应二分（页满即二分日期窗口递归拉取，窗口不重叠合并不损），queries.ts 禁止末尾 ORDER BY/LIMIT。
 - ReOrc 平台默认库可能漂移（belle_oversea → guanyuan_legacy）：回填/定时任务需显式指定 REORC_DATABASE。

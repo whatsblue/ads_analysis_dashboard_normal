@@ -1,7 +1,7 @@
 # 产品功能文档（PRODUCT）
 
 > 在线看板：**https://whatsblue.github.io/ads_analysis_dashboard_normal/**
-> 免登录直接访问（GitHub Pages 公开静态站）；数据每日北京时间 05:00 自动同步（T+1）。
+> 免登录直接访问（GitHub Pages 公开静态站）；数据每日北京时间 16:30/19:30 自动同步（T+1）。
 
 ## 1. 产品定位
 
@@ -12,7 +12,7 @@
 | 广告渠道 | Meta（Ads）+ Google（Ads） |
 | 销售站点 | Shopify + Shoplazza（Meta 投放）；Google 仅归因 Shopify |
 | 未接入 | TikTok、Snapchat、Google×Shoplazza（契约预留扩展位） |
-| 数据更新 | 每日 T+1 05:00 自动同步，滚动更新最近 10 个自然日；顶栏「数据更新」badge 显示 genAt |
+| 数据更新 | 每日 T+1 16:30/19:30 自动同步，滚动更新最近 10 个自然日；顶栏「数据更新」badge 显示 genAt |
 
 ## 2. 信息架构（13 视图）
 
